@@ -174,8 +174,19 @@ def main():
         
         if not args.api_key and (not args.user or not args.password):
             raise ValueError('Missing required Elasticsearch argument: either user and password or apikey')
+        
+        if args.shards < 1:
+            raise ValueError('Number of shards must be greater than 0')
+        
+        if args.replicas < 1:
+            raise ValueError('Number of replicas must be greater than 0')
+        
+        logging.info(f'Connecting to Elasticsearch at {args.host}:{args.port}...')
 
     edx = ElasticIndexer(args.host, args.port, args.user, args.password, args.api_key, args.index, args.dry_run, args.self_signed)
+
+    if not args.dry_run:
+        edx.create_index(args.shards, args.replicas) # Create the index if it does not exist
 
     if os.path.isfile(args.input_path):
         logging.info(f'Processing file: {args.input_path}')

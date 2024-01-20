@@ -74,7 +74,7 @@ class ElasticIndexer:
 
         if not self.es.indices.exists(index=self.es_index):
             response = self.es.indices.create(index=self.es_index, body=mapping)
-            
+
             if response.get('acknowledged') and response.get('shards_acknowledged'):
                 logging.info(f'Index \'{self.es_index}\' successfully created.')
             else:
@@ -82,7 +82,7 @@ class ElasticIndexer:
 
         else:
             logging.warning(f'Index \'{self.es_index}\' already exists.')
-   
+
 
     def process_file(self, file_path: str, batch_size: int):
         '''
@@ -120,7 +120,7 @@ class ElasticIndexer:
         '''
 
         records = []
-        
+
         with open(file_path, 'r') as file:
             for line in file:
                 line = line.strip()
@@ -150,7 +150,7 @@ class ElasticIndexer:
                                 struct['ref_id'] = match.group(1)
                             else:
                                 struct['banner'] = banner
-                    
+
                     if self.dry_run:
                         print(struct)
                     else:
@@ -182,7 +182,7 @@ def main():
     parser.add_argument('--port', type=int, default=9200, help='Elasticsearch port')
     parser.add_argument('--user', default='elastic', help='Elasticsearch username')
     parser.add_argument('--password', default=os.getenv('ES_PASSWORD'), help='Elasticsearch password (if not provided, check environment variable ES_PASSWORD)')
-    parser.add_argument('--api-key', help='Elasticsearch API Key for authentication')    
+    parser.add_argument('--api-key', help='Elasticsearch API Key for authentication')
     parser.add_argument('--self-signed', action='store_false', help='Elasticsearch is using self-signed certificates')
 
     # Elasticsearch indexing arguments
@@ -201,13 +201,22 @@ def main():
 
         if not args.host:
             raise ValueError('Missing required Elasticsearch argument: host')
-        
+
         if not args.api_key and (not args.user or not args.password):
             raise ValueError('Missing required Elasticsearch argument: either user and password or apikey')
 
+        if args.shards < 1:
+            raise ValueError('Number of shards must be greater than 0')
+
+        if args.replicas < 0:
+            raise ValueError('Number of replicas must be greater than 0')
+
+        logging.info(f'Connecting to Elasticsearch at {args.host}:{args.port}...')
+
     edx = ElasticIndexer(args.host, args.port, args.user, args.password, args.api_key, args.index, args.dry_run, args.self_signed)
 
-    edx.create_index(args.shards, args.replicas) # Create the index if it does not exist
+    if not args.dry_run:
+        edx.create_index(args.shards, args.replicas) # Create the index if it does not exist
 
     if os.path.isfile(args.input_path):
         logging.info(f'Processing file: {args.input_path}')

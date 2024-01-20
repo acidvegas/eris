@@ -133,6 +133,7 @@ class ElasticIndexer:
         }
         '''
 
+        count = 0
         records = []
         domain_records = {}
         last_domain = None
@@ -173,7 +174,7 @@ class ElasticIndexer:
 
                 if domain != last_domain:
                     if last_domain:
-                        source = {'domain': domain, 'records': domain_records[last_domain], 'seen': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}
+                        source = {'domain': last_domain, 'records': domain_records[last_domain], 'seen': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}
                         
                         del domain_records[last_domain]
 
@@ -182,9 +183,10 @@ class ElasticIndexer:
                         else:
                             struct = {'_index': self.es_index, '_source': source}
                             records.append(struct)
+                            count += 1
                             if len(records) >= batch_size:
                                 success, _ = helpers.bulk(self.es, records)
-                                logging.info(f'Successfully indexed {success} records to {self.es_index} from {file_path}')
+                                logging.info(f'Successfully indexed {success:,} ({count:,}) records to {self.es_index} from {file_path}')
                                 records = []
 
                     last_domain = domain
@@ -198,7 +200,7 @@ class ElasticIndexer:
 
         if records:
             success, _ = helpers.bulk(self.es, records)
-            logging.info(f'Successfully indexed {success} records to {self.es_index} from {file_path}')
+            logging.info(f'Successfully indexed {success:,} ({count:,}) records to {self.es_index} from {file_path}')
 
 
 def main():
@@ -221,8 +223,8 @@ def main():
 
     # Elasticsearch indexing arguments
     parser.add_argument('--index', default='zone-files', help='Elasticsearch index name')
-    parser.add_argument('--shards', type=int, default=0, help='Number of shards for the index') # This depends on your cluster configuration
-    parser.add_argument('--replicas', type=int, default=0, help='Number of replicas for the index') # This depends on your cluster configuration
+    parser.add_argument('--shards', type=int, default=1, help='Number of shards for the index') # This depends on your cluster configuration
+    parser.add_argument('--replicas', type=int, default=1, help='Number of replicas for the index') # This depends on your cluster configuration
 
     args = parser.parse_args()
 
@@ -238,10 +240,19 @@ def main():
         
         if not args.api_key and (not args.user or not args.password):
             raise ValueError('Missing required Elasticsearch argument: either user and password or apikey')
+        
+        if args.shards < 1:
+            raise ValueError('Number of shards must be greater than 0')
+        
+        if args.replicas < 1:
+            raise ValueError('Number of replicas must be greater than 0')
+        
+        logging.info(f'Connecting to Elasticsearch at {args.host}:{args.port}...')
 
     edx = ElasticIndexer(args.host, args.port, args.user, args.password, args.api_key, args.index, args.dry_run, args.self_signed)
 
-    edx.create_index(args.shards, args.replicas) # Create the index if it does not exist
+    if not args.dry_run:
+        edx.create_index(args.shards, args.replicas) # Create the index if it does not exist
 
     if os.path.isfile(args.input_path):
         logging.info(f'Processing file: {args.input_path}')
