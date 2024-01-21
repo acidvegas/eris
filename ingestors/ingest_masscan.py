@@ -6,7 +6,7 @@
 # This script takes JSON formatted masscan logs with banners and indexes them into Elasticsearch.
 #
 # Saving my "typical" masscan command here for reference to myself:
-#   masscan 0.0.0.0/0 -p80,443 --banners --open-only --rate 50000 --shard 1/10 --excludefile exclude.conf -oJ output.json --interactive
+#   masscan 0.0.0.0/0 -p3559,1900 --banners --open-only --rate 25000 --excludefile exclude.conf -oJ output.json --interactive
 
 import argparse
 import json

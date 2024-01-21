@@ -38,5 +38,4 @@ python ingest_XXXX.py [options] <input>
 
 ___
 
-###### Mirrors
-[acid.vegas](https://git.acid.vegas/eris) • [GitHub](https://github.com/acidvegas/eris) • [GitLab](https://gitlab.com/acidvegas/eris) • [SuperNETs](https://git.supernets.org/acidvegas/eris)
+###### Mirrors for this repository: [acid.vegas](https://git.acid.vegas/eris) • [SuperNETs](https://git.supernets.org/acidvegas/eris) • [GitHub](https://github.com/acidvegas/eris) • [GitLab](https://gitlab.com/acidvegas/eris) • [Codeberg](https://codeberg.org/acidvegas/eris)
