@@ -13,28 +13,37 @@ python ingest_XXXX.py [options] <input>
 ```
 **Note:** The `<input>` can be a file or a directory of files, depending on the ingestion script.
 
-###### Options
-| Argument        | Description                                                                                  |
-| --------------- | -------------------------------------------------------------------------------------------- |
-| `--dry-run`     | Perform a dry run without indexing records to Elasticsearch.                                 |
-| `--batch_size`  | Number of records to index in a batch *(default 25,000)*.                                    |
+###
+###### General arguments
+| Argument          | Description                                                    |
+|-------------------|----------------------------------------------------------------|
+| `input_path`      | Path to the input file or directory                            |
+| `--dry-run`       | Dry run *(do not index records to Elasticsearch)*              |
+| `--watch`         | Watch the input file for new lines and index them in real time |
 
-###### Elasticsearch Connnection Options
-| Argument        | Description                                                                                  |
-| --------------- | -------------------------------------------------------------------------------------------- |
-| `--host`        | Elasticsearch host *(default 'localhost')*.                                                  |
-| `--port`        | Elasticsearch port *(default 9200)*.                                                         |
-| `--user`        | Elasticsearch username *(default 'elastic')*.                                                |
-| `--password`    | Elasticsearch password. If not provided, it checks the environment variable **ES_PASSWORD**. |
-| `--api-key`     | Elasticsearch API Key for authentication.                                                    |
-| `--self-signed` | Allow self-signed certificates.                                                              |
+###### Elasticsearch arguments
+| Argument          | Description                                                                          | Default       |
+|-------------------|--------------------------------------------------------------------------------------|---------------|
+| `--host`          | Elasticsearch host *(Will sniff for other nodes in the cluster)*                     | `localhost`   |
+| `--port`          | Elasticsearch port                                                                   | `9200`        |
+| `--user`          | Elasticsearch username                                                               | `elastic`     |
+| `--password`      | Elasticsearch password *(if not provided, check environment variable `ES_PASSWORD`)* |               |
+| `--api-key`       | Elasticsearch API Key for authentication                                             |               |
+| `--self-signed`   | Elastic search instance is using a self-signed certificate                           | `true`        |
+| `--index`         | Elasticsearch index name                                                             | `masscan-logs`|
+| `--shards`        | Number of shards for the index                                                       | `1`           |
+| `--replicas`      | Number of replicas for the index                                                     | `1`           |
 
-###### Elasticsearch Index Options
-| Argument        | Description                                                                                  |
-| --------------- | -------------------------------------------------------------------------------------------- |
-| `--index`       | Elasticsearch index name *(default 'zone_files')*.                                           |
-| `--replicas`    | Number of replicas for the index.                                                            |
-| `--shards`      | Number of shards for the index                                                               |
+###### Performance arguments
+| Argument          | Description                                                                          | Default       |
+|-------------------|--------------------------------------------------------------------------------------|---------------|
+| `--batch-max`     | Maximum size in MB of a batch                                                        | `10`          |
+| `--batch-size`    | Number of records to index in a batch                                                | `5000`        |
+| `--batch-threads` | Number of threads to use when indexing in batches                                    | `2`           |
+| `--retries`       | Number of times to retry indexing a batch before failing                             | `10`          |
+| `--timeout`       | Number of seconds to wait before retrying a batch                                    | `30`          |
+
+**NOTE:** Using `--batch-threads` as 4 and `--batch-size` as 10000 with 3 nodes would process 120,000 records before indexing 40,000 per node.
 
 ___
 

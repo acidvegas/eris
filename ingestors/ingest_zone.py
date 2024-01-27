@@ -12,13 +12,21 @@
 # Anomaly detection is in place to alert the user of any unexpected records.
 
 
+# WARNING NOTICE:
+# 
+# The following zones need reindex due to previous unsupported record types:
+#   - .wang (Contains a completely invalid line) (tjjm6hs65gL9KUFU76J747MB NS)
+#   - .tel  (NAPTR records were missing)
+#   - .nu   (RP records were missing
+#   - .se   (RP records were missing)
+
 import argparse
 import logging
 import os
 import time
 
 try:
-    from elasticsearch import Elasticsearch, helpers
+    from elasticsearch import Elasticsearch, helpers, ConnectionError, TransportError
 except ImportError:
     raise ImportError('Missing required \'elasticsearch\' library. (pip install elasticsearch)')
 
@@ -27,7 +35,7 @@ except ImportError:
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', datefmt='%m/%d %I:%M:%S')
 
 # Record types to index
-record_types = ('a','aaaa','caa','cdnskey','cds','cname','dnskey','ds','mx','ns','nsec','nsec3','nsec3param','ptr','rrsig','sshfp','soa','srv','txt','type65534')
+record_types = ('a','aaaa','caa','cdnskey','cds','cname','dnskey','ds','mx','naptr','ns','nsec','nsec3','nsec3param','ptr','rrsig','rp','sshfp','soa','srv','txt','type65534')
 
 
 class ElasticIndexer:
@@ -185,9 +193,16 @@ class ElasticIndexer:
                             records.append(struct)
                             count += 1
                             if len(records) >= batch_size:
-                                success, _ = helpers.bulk(self.es, records)
-                                logging.info(f'Successfully indexed {success:,} ({count:,}) records to {self.es_index} from {file_path}')
-                                records = []
+                                while True:
+                                    try:
+                                        success, _ = helpers.bulk(self.es, records)
+                                    except (ConnectionError, TransportError) as e:
+                                        logging.error(f'Failed to index records to Elasticsearch. ({e})')
+                                        time.sleep(60)
+                                    else:
+                                        logging.info(f'Successfully indexed {success:,} ({count:,}) records to {self.es_index} from {file_path}')
+                                        records = []
+                                        break
 
                     last_domain = domain
 
@@ -199,8 +214,15 @@ class ElasticIndexer:
                 domain_records[domain][record_type].append({'ttl': ttl, 'data': data})
 
         if records:
-            success, _ = helpers.bulk(self.es, records)
-            logging.info(f'Successfully indexed {success:,} ({count:,}) records to {self.es_index} from {file_path}')
+            while True:
+                try:
+                    success, _ = helpers.bulk(self.es, records)
+                except (ConnectionError, TransportError) as e:
+                    logging.error(f'Failed to index records to Elasticsearch. ({e})')
+                    time.sleep(60)
+                else:
+                    logging.info(f'Successfully indexed {success:,} ({count:,}) records to {self.es_index} from {file_path}')
+                    break
 
 
 def main():
@@ -222,7 +244,7 @@ def main():
     parser.add_argument('--self-signed', action='store_false', help='Elasticsearch is using self-signed certificates')
 
     # Elasticsearch indexing arguments
-    parser.add_argument('--index', default='zone-files', help='Elasticsearch index name')
+    parser.add_argument('--index', default='dns-zones', help='Elasticsearch index name')
     parser.add_argument('--shards', type=int, default=1, help='Number of shards for the index') # This depends on your cluster configuration
     parser.add_argument('--replicas', type=int, default=1, help='Number of replicas for the index') # This depends on your cluster configuration
 
@@ -268,7 +290,6 @@ def main():
 
     else:
         raise ValueError(f'Input path {args.input_path} is not a file or directory')
-
 
 
 if __name__ == '__main__':

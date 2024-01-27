@@ -12,9 +12,10 @@ import argparse
 import json
 import logging
 import os
+import time
 
 try:
-    from elasticsearch import Elasticsearch, helpers
+    from elasticsearch import Elasticsearch, helpers, ConnectionError, TransportError
 except ImportError:
     raise ImportError('Missing required \'elasticsearch\' library. (pip install elasticsearch)')
 
@@ -105,6 +106,7 @@ class ElasticIndexer:
         }
         '''
 
+        count = 0
         records = []
 
         with open(file_path, 'r') as file:
@@ -126,15 +128,29 @@ class ElasticIndexer:
                 else:
                     record = {'_index': self.es_index, '_source': record}
                     records.append(record)
-
+                    count += 1
                     if len(records) >= batch_size:
-                        success, _ = helpers.bulk(self.es, records)
-                        logging.info(f'Successfully indexed {success} records to {self.es_index}')
-                        records = []
+                         while True:
+                            try:
+                                success, _ = helpers.bulk(self.es, records)
+                            except (ConnectionError, TransportError) as e:
+                                logging.error(f'Failed to index records to Elasticsearch. ({e})')
+                                time.sleep(60)
+                            else:
+                                logging.info(f'Successfully indexed {success:,} ({count:,}) records to {self.es_index} from {file_path}')
+                                records = []
+                                break
 
         if records:
-            success, _ = helpers.bulk(self.es, records)
-            logging.info(f'Successfully indexed {success} records to {self.es_index}')
+             while True:
+                try:
+                    success, _ = helpers.bulk(self.es, records)
+                except (ConnectionError, TransportError) as e:
+                    logging.error(f'Failed to index records to Elasticsearch. ({e})')
+                    time.sleep(60)
+                else:
+                    logging.info(f'Successfully indexed {success:,} ({count:,}) records to {self.es_index} from {file_path}')
+                    break
 
 
 def main():

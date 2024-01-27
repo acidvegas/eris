@@ -9,13 +9,13 @@
 #   python $HOME/massdns/scripts/ptr.py | massdns -r $HOME/massdns/nameservers.txt -t PTR --filter NOERROR -o J -w $HOME/massdns/ptr.json
 
 import argparse
-import json
 import logging
 import os
 import time
 
 try:
     from elasticsearch import Elasticsearch, helpers
+    import sniff_patch
 except ImportError:
     raise ImportError('Missing required \'elasticsearch\' library. (pip install elasticsearch)')
 
@@ -25,11 +25,11 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 
 
 class ElasticIndexer:
-    def __init__(self, es_host: str, es_port: str, es_user: str, es_password: str, es_api_key: str, es_index: str, dry_run: bool = False, self_signed: bool = False):
+    def __init__(self, es_host: str, es_port: int, es_user: str, es_password: str, es_api_key: str, es_index: str, dry_run: bool = False, self_signed: bool = False, retries: int = 10, timeout: int = 30):
         '''
         Initialize the Elastic Search indexer.
 
-        :param es_host: Elasticsearch host
+        :param es_host: Elasticsearch host(s)
         :param es_port: Elasticsearch port
         :param es_user: Elasticsearch username
         :param es_password: Elasticsearch password
@@ -37,6 +37,8 @@ class ElasticIndexer:
         :param es_index: Elasticsearch index name
         :param dry_run: If True, do not initialize Elasticsearch client
         :param self_signed: If True, do not verify SSL certificates
+        :param retries: Number of times to retry indexing a batch before failing
+        :param timeout: Number of seconds to wait before retrying a batch
         '''
 
         self.dry_run = dry_run
@@ -44,11 +46,25 @@ class ElasticIndexer:
         self.es_index = es_index
 
         if not dry_run:
+            es_config = {
+                'hosts': [f'{es_host}:{es_port}'],
+                'verify_certs': self_signed,
+                'ssl_show_warn': self_signed,
+                'request_timeout': timeout,
+                'max_retries': retries,
+                'retry_on_timeout': True,
+                'sniff_on_start': False,
+                'sniff_on_node_failure': True,
+                'min_delay_between_sniffing': 60
+            }
 
             if es_api_key:
-                self.es = Elasticsearch([f'{es_host}:{es_port}'], headers={'Authorization': f'ApiKey {es_api_key}'}, verify_certs=self_signed, ssl_show_warn=self_signed)
+                es_config['headers'] = {'Authorization': f'ApiKey {es_api_key}'}
             else:
-                self.es = Elasticsearch([f'{es_host}:{es_port}'], basic_auth=(es_user, es_password), verify_certs=self_signed, ssl_show_warn=self_signed)
+                es_config['basic_auth'] = (es_user, es_password)
+
+            #self.es = Elasticsearch(**es_config)
+            self.es = sniff_patch.init_elasticsearch(**es_config)
 
 
     def create_index(self, shards: int = 1, replicas: int = 1):
@@ -61,13 +77,10 @@ class ElasticIndexer:
             },
             'mappings': {
                 'properties': {
-                    'ip':      { 'type': 'ip' },
-                    'port':    { 'type': 'integer' },
-                    'proto':   { 'type': 'keyword' },
-                    'service': { 'type': 'keyword' },
-                    'banner':  { 'type': 'text', 'fields': { 'keyword': { 'type': 'keyword', 'ignore_above': 256 } } },
-                    'ref_id':  { 'type': 'keyword' },
-                    'seen':    { 'type': 'date' }
+                    'ip':     { 'type': 'ip' },
+                    'name':   { 'type': 'keyword' },
+                    'record': { 'type': 'text', 'fields': { 'keyword': { 'type': 'keyword', 'ignore_above': 256 } } },
+                    'seen':   { 'type': 'date' }
                 }
             }
         }
@@ -84,7 +97,17 @@ class ElasticIndexer:
             logging.warning(f'Index \'{self.es_index}\' already exists.')
 
 
-    def process_file(self, file_path: str, batch_size: int):
+    def get_cluster_size(self) -> int:
+        '''Get the number of nodes in the Elasticsearch cluster.'''
+
+        cluster_stats = self.es.cluster.stats()
+        number_of_nodes = cluster_stats['nodes']['count']['total']
+
+        return number_of_nodes
+
+
+
+    def process_file(self, file_path: str, watch: bool = False, chunk: dict = {}):
         '''
         Read and index PTR records in batches to Elasticsearch, handling large volumes efficiently.
 
@@ -92,78 +115,122 @@ class ElasticIndexer:
         :param batch_size: Number of records to process before indexing
 
         Example PTR record:
+        0.6.229.47.in-addr.arpa. PTR 047-229-006-000.res.spectrum.com.
+        0.6.228.75.in-addr.arpa. PTR 0.sub-75-228-6.myvzw.com.
+        0.6.207.73.in-addr.arpa. PTR c-73-207-6-0.hsd1.ga.comcast.net.
+        0.6.212.173.in-addr.arpa. PTR 173-212-6-0.cpe.surry.net.
+        0.6.201.133.in-addr.arpa. PTR flh2-133-201-6-0.tky.mesh.ad.jp.
+
+        Will be indexed as:
         {
-            "name":"0.0.50.73.in-addr.arpa.",
-            "type":"PTR",
-            "class":"IN",
-            "status":"NOERROR",
-            "rx_ts":1704595370817617348,
-            "data": {
-                "answers": [
-                        {"ttl":3600,"type":"PTR","class":"IN","name":"0.0.50.73.in-addr.arpa.","data":"c-73-50-0-0.hsd1.il.comcast.net."}
-                    ],
-                "authorities": [
-                    {"ttl":86400,"type":"NS","class":"IN","name":"73.in-addr.arpa.","data":"dns102.comcast.net."},
-                    {"ttl":86400,"type":"NS","class":"IN","name":"73.in-addr.arpa.","data":"dns103.comcast.net."},
-                    {"ttl":86400,"type":"NS","class":"IN","name":"73.in-addr.arpa.","data":"dns105.comcast.net."},
-                    {"ttl":86400,"type":"NS","class":"IN","name":"73.in-addr.arpa.","data":"dns101.comcast.net."},
-                    {"ttl":86400,"type":"NS","class":"IN","name":"73.in-addr.arpa.","data":"dns104.comcast.net."}
-                ],
-                "additionals":[
-                    {"ttl":105542,"type":"A","class":"IN","name":"dns101.comcast.net.","data":"69.252.250.103"},
-                    {"ttl":105542,"type":"A","class":"IN","name":"dns102.comcast.net.","data":"68.87.85.132"},
-                    {"ttl":105542,"type":"AAAA","class":"IN","name":"dns104.comcast.net.","data":"2001:558:100a:5:68:87:68:244"},
-                    {"ttl":105542,"type":"AAAA","class":"IN","name":"dns105.comcast.net.","data":"2001:558:100e:5:68:87:72:244"}
-                ]
-            },
-            "flags": ["rd","ra"],
-            "resolver":"103.144.64.173:53",
-            "proto":"UDP"
+            "ip": "47.229.6.0",
+            "record": "047-229-006-000.res.spectrum.com.",
+            "seen": "2021-06-30T18:31:00Z"
         }
         '''
 
+        count = 0
         records = []
 
         with open(file_path, 'r') as file:
-            for line in file:
+            for line in (file := follow(file) if watch else file):
                 line = line.strip()
 
                 if not line:
                     continue
 
-                record = json.loads(line.strip())
+                parts = line.split()
 
-                # Should we keep CNAME records? Can an IP address have a CNAME?
-                if record['type'] != 'PTR':
-                    logging.error(record)
-                    raise ValueError(f'Unsupported record type: {record["type"]}')
-               
-                if record['class'] != 'IN':
-                    logging.error(record)
-                    raise ValueError(f'Unsupported record class: {record["class"]}')
+                if len(parts) < 3:
+                    raise ValueError(f'Invalid PTR record: {line}')
+                
+                name, record_type, data = parts[0].rstrip('.'), parts[1], ' '.join(parts[2:]).rstrip('.')
 
-                if record['status'] != 'NOERROR':
-                    logging.warning(f'Skipping bad record: {record}')
+                if record_type != 'PTR':
                     continue
 
-                record['ip'] = '.'.join(record['name'].replace('.in-addr.arpa', '').split('.')[::-1])
-                record['name'] = record['name'].rstrip('.')
-                record['timestamp'] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(record.pop('rx_ts') / 1_000_000_000))
+                # Let's not index the PTR record if it's the same as the in-addr.arpa domain
+                if data == name:
+                    continue
+
+                ip = '.'.join(name.replace('.in-addr.arpa', '').split('.')[::-1])
+                
+                source = {
+                    'ip': ip,
+                    'record': data,
+                    'seen': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+                }
                 
                 if self.dry_run:
-                    print(record)
+                    print(source)
                 else:
-                    struct = {'_index': self.es_index, '_source': struct}
+                    struct = {'_index': self.es_index, '_source': source}
                     records.append(struct)
-
-                    if len(records) >= batch_size:
-                        success, _ = helpers.bulk(self.es, records)
-                        logging.info(f'Successfully indexed {success} records to {self.es_index}')
+                    count += 1
+                    if len(records) >= chunk['batch']:
+                        self.bulk_index(records, file_path, chunk, count)
                         records = []
 
         if records:
-            success, _ = helpers.bulk(self.es, records)
-            logging.info(f'Successfully indexed {success} records to {self.es_index}')
+           self.bulk_index(records, file_path, chunk, count)
+
+
+    def bulk_index(self, documents: list, file_path: str, chunk: dict, count: int):
+        '''
+        Index a batch of documents to Elasticsearch.
+        
+        :param documents: List of documents to index
+        :param file_path: Path to the file being indexed
+        :param count: Total number of records processed
+        '''
+        remaining_documents = documents
+
+        parallel_bulk_config = {
+            'client': self.es,
+            'chunk_size': chunk['size'],
+            'max_chunk_bytes': chunk['max_size'] * 1024 * 1024, # MB
+            'thread_count': chunk['threads'],
+            'queue_size': 2
+        }
+
+        while remaining_documents:
+            failed_documents = []
+
+            try:
+                for success, response in helpers.parallel_bulk(actions=remaining_documents, **parallel_bulk_config):
+                    if not success:
+                        failed_documents.append(response)
+
+                if not failed_documents:
+                    ingested = parallel_bulk_config['chunk_size'] * parallel_bulk_config['thread_count']
+                    logging.info(f'Successfully indexed {ingested:,} ({count:,} processed) records to {self.es_index} from {file_path}')
+                    break
+
+                else:
+                    logging.warning(f'Failed to index {len(failed_documents):,} failed documents! Retrying...')
+                    remaining_documents = failed_documents
+            except Exception as e:
+                logging.error(f'Failed to index documents! ({e})')
+                time.sleep(30)
+
+
+def follow(file) -> str:
+    '''
+    Generator function that yields new lines in a file in real time.
+    
+    :param file: File object to read from
+    '''
+
+    file.seek(0,2) # Go to the end of the file
+
+    while True:
+        line = file.readline()
+
+        if not line:
+            time.sleep(0.1)
+            continue
+
+        yield line
 
 
 def main():
@@ -174,63 +241,102 @@ def main():
 
     # General arguments
     parser.add_argument('--dry-run', action='store_true', help='Dry run (do not index records to Elasticsearch)')
-    parser.add_argument('--batch_size', type=int, default=50000, help='Number of records to index in a batch')
-
-    # Elasticsearch connection arguments
+    parser.add_argument('--watch', action='store_true', help='Watch the input file for new lines and index them in real time')
+    
+    # Elasticsearch arguments
     parser.add_argument('--host', default='localhost', help='Elasticsearch host')
     parser.add_argument('--port', type=int, default=9200, help='Elasticsearch port')
     parser.add_argument('--user', default='elastic', help='Elasticsearch username')
     parser.add_argument('--password', default=os.getenv('ES_PASSWORD'), help='Elasticsearch password (if not provided, check environment variable ES_PASSWORD)')
-    parser.add_argument('--api-key', help='Elasticsearch API Key for authentication')    
+    parser.add_argument('--api-key', help='Elasticsearch API Key for authentication')
     parser.add_argument('--self-signed', action='store_false', help='Elasticsearch is using self-signed certificates')
 
     # Elasticsearch indexing arguments
-    parser.add_argument('--index', default='zone-files', help='Elasticsearch index name')
+    parser.add_argument('--index', default='ptr-records', help='Elasticsearch index name')
     parser.add_argument('--shards', type=int, default=1, help='Number of shards for the index')
     parser.add_argument('--replicas', type=int, default=1, help='Number of replicas for the index')
+
+    # Batch arguments (for fine tuning performance)
+    parser.add_argument('--batch-max', type=int, default=10, help='Maximum size in MB of a batch')
+    parser.add_argument('--batch-size', type=int, default=5000, help='Number of records to index in a batch')
+    parser.add_argument('--batch-threads', type=int, default=2, help='Number of threads to use when indexing in batches')
+    # NOTE: Using --batch-threads as 4 and --batch-size as 10000 means we will process 40,000 records per-node before indexing, so 3 nodes would process 120,000 records before indexing
+
+    # Elasticsearch retry arguments
+    parser.add_argument('--retries', type=int, default=10, help='Number of times to retry indexing a batch before failing')
+    parser.add_argument('--timeout', type=int, default=30, help='Number of seconds to wait before retrying a batch')
 
     args = parser.parse_args()
 
     if not os.path.exists(args.input_path):
         raise FileNotFoundError(f'Input file {args.input_path} does not exist')
+    elif not os.path.isdir(args.input_path) and not os.path.isfile(args.input_path):
+        raise ValueError(f'Input path {args.input_path} is not a file or directory')
 
     if not args.dry_run:
         if args.batch_size < 1:
             raise ValueError('Batch size must be greater than 0')
+        
+        elif args.retries < 1:
+            raise ValueError('Number of retries must be greater than 0')
+        
+        elif args.timeout < 5:
+            raise ValueError('Timeout must be greater than 4')
+        
+        elif args.batch_max < 1:
+            raise ValueError('Batch max size must be greater than 0')
+        
+        elif args.batch_threads < 1:
+            raise ValueError('Batch threads must be greater than 0')
 
-        if not args.host:
+        elif not args.host:
             raise ValueError('Missing required Elasticsearch argument: host')
-        
-        if not args.api_key and (not args.user or not args.password):
+
+        elif not args.api_key and (not args.user or not args.password):
             raise ValueError('Missing required Elasticsearch argument: either user and password or apikey')
-        
-        if args.shards < 1:
+
+        elif args.shards < 1:
             raise ValueError('Number of shards must be greater than 0')
-        
-        if args.replicas < 1:
+
+        elif args.replicas < 0:
             raise ValueError('Number of replicas must be greater than 0')
-        
-        logging.info(f'Connecting to Elasticsearch at {args.host}:{args.port}...')
 
-    edx = ElasticIndexer(args.host, args.port, args.user, args.password, args.api_key, args.index, args.dry_run, args.self_signed)
-
+    edx = ElasticIndexer(args.host, args.port, args.user, args.password, args.api_key, args.index, args.dry_run, args.self_signed, args.retries, args.timeout)
+    
     if not args.dry_run:
+        time.sleep(5) # Delay to allow time for sniffing to complete
+
+        nodes = edx.get_cluster_size()
+        logging.info(f'Connected to {nodes:,} Elasticsearch node(s)')
+
         edx.create_index(args.shards, args.replicas) # Create the index if it does not exist
+
+        chunk = {
+            'size': args.batch_size,
+            'max_size': args.batch_max * 1024 * 1024,
+            'threads': args.batch_threads
+        }
+        
+        chunk['batch'] = nodes * (chunk['size'] * chunk['threads'])
+    else:
+        chunk = {} # Ugly hack to get this working...
 
     if os.path.isfile(args.input_path):
         logging.info(f'Processing file: {args.input_path}')
-        edx.process_file(args.input_path, args.batch_size)
+        edx.process_file(args.input_path, args.watch, chunk)
 
     elif os.path.isdir(args.input_path):
-        logging.info(f'Processing files in directory: {args.input_path}')
+        count = 1
+        total = len(os.listdir(args.input_path))
+        logging.info(f'Processing {total:,} files in directory: {args.input_path}')
         for file in sorted(os.listdir(args.input_path)):
             file_path = os.path.join(args.input_path, file)
             if os.path.isfile(file_path):
-                logging.info(f'Processing file: {file_path}')
-                edx.process_file(file_path, args.batch_size)
-
-    else:
-        raise ValueError(f'Input path {args.input_path} is not a file or directory')
+                logging.info(f'[{count:,}/{total:,}] Processing file: {file_path}')
+                edx.process_file(file_path, args.watch, chunk)
+                count += 1
+            else:
+                logging.warning(f'[{count:,}/{total:,}] Skipping non-file: {file_path}')
 
 
 
