@@ -15,7 +15,6 @@ import time
 
 try:
     from elasticsearch import Elasticsearch, helpers
-    import sniff_patch
 except ImportError:
     raise ImportError('Missing required \'elasticsearch\' library. (pip install elasticsearch)')
 
@@ -62,13 +61,22 @@ class ElasticIndexer:
                 es_config['headers'] = {'Authorization': f'ApiKey {es_api_key}'}
             else:
                 es_config['basic_auth'] = (es_user, es_password)
-
-            #self.es = Elasticsearch(**es_config)
+                
+            # Patching the Elasticsearch client to fix a bug with sniffing (https://github.com/elastic/elasticsearch-py/issues/2005#issuecomment-1645641960)
+            import sniff_patch
             self.es = sniff_patch.init_elasticsearch(**es_config)
+
+            # Remove the above and uncomment the below if the bug is fixed in the Elasticsearch client:
+            #self.es = Elasticsearch(**es_config)
 
 
     def create_index(self, shards: int = 1, replicas: int = 1):
-        '''Create the Elasticsearch index with the defined mapping.'''
+        '''
+        Create the Elasticsearch index with the defined mapping.
+        
+        :param shards: Number of shards for the index
+        :param replicas: Number of replicas for the index
+        '''
 
         mapping = {
             'settings': {
@@ -97,6 +105,12 @@ class ElasticIndexer:
             logging.warning(f'Index \'{self.es_index}\' already exists.')
 
 
+    def get_cluster_health(self) -> dict:
+        '''Get the health of the Elasticsearch cluster.'''
+
+        return self.es.cluster.health()
+    
+
     def get_cluster_size(self) -> int:
         '''Get the number of nodes in the Elasticsearch cluster.'''
 
@@ -106,13 +120,13 @@ class ElasticIndexer:
         return number_of_nodes
 
 
-
     def process_file(self, file_path: str, watch: bool = False, chunk: dict = {}):
         '''
         Read and index PTR records in batches to Elasticsearch, handling large volumes efficiently.
 
-        :param file_path: Path to the PTR log file
-        :param batch_size: Number of records to process before indexing
+        :param file_path: Path to the Masscan log file
+        :param watch: If True, input file will be watched for new lines and indexed in real time\
+        :param chunk: Chunk configuration for indexing in batches
 
         Example PTR record:
         0.6.229.47.in-addr.arpa. PTR 047-229-006-000.res.spectrum.com.
@@ -181,14 +195,16 @@ class ElasticIndexer:
         
         :param documents: List of documents to index
         :param file_path: Path to the file being indexed
+        :param chunk: Chunk configuration
         :param count: Total number of records processed
         '''
+        
         remaining_documents = documents
 
         parallel_bulk_config = {
             'client': self.es,
             'chunk_size': chunk['size'],
-            'max_chunk_bytes': chunk['max_size'] * 1024 * 1024, # MB
+            'max_chunk_bytes': chunk['max_size'],
             'thread_count': chunk['threads'],
             'queue_size': 2
         }
@@ -237,9 +253,9 @@ def main():
     '''Main function when running this script directly.'''
 
     parser = argparse.ArgumentParser(description='Index data into Elasticsearch.')
-    parser.add_argument('input_path', help='Path to the input file or directory')
-
+    
     # General arguments
+    parser.add_argument('input_path', help='Path to the input file or directory') # Required
     parser.add_argument('--dry-run', action='store_true', help='Dry run (do not index records to Elasticsearch)')
     parser.add_argument('--watch', action='store_true', help='Watch the input file for new lines and index them in real time')
     
@@ -256,22 +272,18 @@ def main():
     parser.add_argument('--shards', type=int, default=1, help='Number of shards for the index')
     parser.add_argument('--replicas', type=int, default=1, help='Number of replicas for the index')
 
-    # Batch arguments (for fine tuning performance)
+    # Performance arguments
     parser.add_argument('--batch-max', type=int, default=10, help='Maximum size in MB of a batch')
     parser.add_argument('--batch-size', type=int, default=5000, help='Number of records to index in a batch')
     parser.add_argument('--batch-threads', type=int, default=2, help='Number of threads to use when indexing in batches')
-    # NOTE: Using --batch-threads as 4 and --batch-size as 10000 means we will process 40,000 records per-node before indexing, so 3 nodes would process 120,000 records before indexing
-
-    # Elasticsearch retry arguments
     parser.add_argument('--retries', type=int, default=10, help='Number of times to retry indexing a batch before failing')
     parser.add_argument('--timeout', type=int, default=30, help='Number of seconds to wait before retrying a batch')
 
     args = parser.parse_args()
 
-    if not os.path.exists(args.input_path):
-        raise FileNotFoundError(f'Input file {args.input_path} does not exist')
-    elif not os.path.isdir(args.input_path) and not os.path.isfile(args.input_path):
-        raise ValueError(f'Input path {args.input_path} is not a file or directory')
+    # Argument validation
+    if not os.path.isdir(args.input_path) and not os.path.isfile(args.input_path):
+        raise FileNotFoundError(f'Input path {args.input_path} does not exist or is not a file or directory')
 
     if not args.dry_run:
         if args.batch_size < 1:
@@ -304,16 +316,19 @@ def main():
     edx = ElasticIndexer(args.host, args.port, args.user, args.password, args.api_key, args.index, args.dry_run, args.self_signed, args.retries, args.timeout)
     
     if not args.dry_run:
-        time.sleep(5) # Delay to allow time for sniffing to complete
+        print(edx.get_cluster_health())
+
+        time.sleep(3) # Delay to allow time for sniffing to complete
 
         nodes = edx.get_cluster_size()
+
         logging.info(f'Connected to {nodes:,} Elasticsearch node(s)')
 
         edx.create_index(args.shards, args.replicas) # Create the index if it does not exist
 
         chunk = {
             'size': args.batch_size,
-            'max_size': args.batch_max * 1024 * 1024,
+            'max_size': args.batch_max * 1024 * 1024, # MB
             'threads': args.batch_threads
         }
         
