@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # Elasticsearch Recon Ingestion Scripts (ERIS) - Developed by Acidvegas (https://git.acid.vegas/eris)
+# sniff_patch.py
 
 # Note:
 #   This is a patch for the elasticsearch 8.x client to fix the sniff_* options.
