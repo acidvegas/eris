@@ -56,7 +56,7 @@ def process_file(file_path: str):
             # Let's not index the PTR record if it's the same as the in-addr.arpa domain
             if data == name:
                 continue
-
+                    
             ip = '.'.join(name.replace('.in-addr.arpa', '').split('.')[::-1])
             
             struct = {

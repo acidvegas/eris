@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # Elasticsearch Recon Ingestion Scripts (ERIS) - Developed by Acidvegas (https://git.acid.vegas/eris)
-# ingest_masscan.py
+# ingest_masscan.py [asyncronous developement]
 
 '''
 apt-get install iptables masscan libpcap-dev screen
@@ -100,7 +100,7 @@ def process_file(file_path: str):
                             else:
                                 struct['banner'] = banner
 
-                yield struct
+                yield {'_index': default_index, '_source': struct}
  
     return None # EOF
 
@@ -131,6 +131,6 @@ Will be indexed as:
     "service": "ssh",
     "banner": "SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.4",
     "seen": "2021-10-08T02:04:28Z",
-    "ref_id": "?sKfOvsC4M4a2W8PaC4zF?" # TCP RST Payload (Do we need this?)
+    "ref_id": "?sKfOvsC4M4a2W8PaC4zF?" # TCP RST Payload, Might be useful..
 }
 '''

@@ -11,13 +11,13 @@ BATCH_SIZE=10000
 ES_HOST="https://elastic.change.me:9200"
 ES_INDEX="juicy_booties"
 
-SCROLL_ID=$(curl -s -XGET "$ES_HOST/$ES_INDEX/_search?scroll=1m" -H 'Content-Type: application/json' -d'{ "size": $BATCH_SIZE, "query": { "match_all": {} } }' | jq -r '._scroll_id')
+SCROLL_ID=$(curl -s -XGET "$ES_HOST/$ES_INDEX/_search?scroll=1m" -H 'Content-Type: application/json' -d"{ \"size\": $BATCH_SIZE, \"query\": { \"match_all\": {} } }" | jq -r '._scroll_id')
 
 count=0
 
 while true; do
-	RESPONSE=$(curl -s -XGET "$ES_HOST/_search/scroll" -H 'Content-Type: application/json' -d'{"scroll": "1m", "scroll_id": "'$SCROLL_ID'"}')
-	
+	RESPONSE=$(curl -s -XGET "$ES_HOST/_search/scroll" -H 'Content-Type: application/json' -d"{\"scroll\": \"1m\", \"scroll_id\": \"$SCROLL_ID\"}")
+
 	HITS=$(echo $RESPONSE | jq -c '.hits.hits[]')
 
 	if [ -z "$HITS" ] || [ "$HITS" = "null" ]; then

@@ -22,7 +22,6 @@ def bytes_to_human_readable(num_bytes):
         num_bytes /= 1024.0
     return f"{num_bytes:.1f}YB"
 
-
 def main():
     '''Main function when running this script directly.'''
 
@@ -43,63 +42,62 @@ def main():
     }
     es = Elasticsearch(**es_config)
 
-    stats = es.cluster.stats()
+    while True:
+        os.system('clear')
 
-    name = stats['cluster_name']
-    status = stats['status']
-    indices = {
-        'total': stats['indices']['count'],
-        'shards': stats['indices']['shards']['total'],
-        'docs': stats['indices']['docs']['count'],
-        'size': bytes_to_human_readable(stats['indices']['store']['size_in_bytes'])
-    }
-    nodes = {
-        'total': stats['_nodes']['total'],
-        'successful': stats['_nodes']['successful'],
-        'failed': stats['_nodes']['failed']
-    }
+        stats = es.cluster.stats()
 
-    if status == 'green':
-        print(f'Cluster   {name} (\033[92m{status}\033[0m)')
-    elif status == 'yellow':
-        print(f'Cluster   {name} (\033[93m{status}\033[0m)')
-    elif status == 'red':
-        print(f'Cluster   {name} (\033[91m{status}\033[0m)')
-    
-    print('')
-    print(f'Nodes     {nodes["total"]} Total, {nodes["successful"]} Successful, {nodes["failed"]} Failed')
+        name = stats['cluster_name']
+        status = stats['status']
+        indices = {
+            'total': stats['indices']['count'],
+            'shards': stats['indices']['shards']['total'],
+            'docs': stats['indices']['docs']['count'],
+            'size': bytes_to_human_readable(stats['indices']['store']['size_in_bytes'])
+        }
+        nodes = {
+            'total': stats['_nodes']['total'],
+            'successful': stats['_nodes']['successful'],
+            'failed': stats['_nodes']['failed']
+        }
 
-    nodes_info = es.nodes.info()
-    # Loop through each node and print details
-    for node_id, node_info in nodes_info['nodes'].items():
-        node_name = node_info['name']
-        transport_address = node_info['transport_address']
-        #node_stats = es.nodes.stats(node_id=node_id)
-        version = node_info['version']
-        memory = bytes_to_human_readable(int(node_info['settings']['node']['attr']['ml']['machine_memory']))
-        print(f"          {node_name.ljust(7)} | Host: {transport_address.rjust(21)} | Version: {version.ljust(7)} | Processors: {node_info['os']['available_processors']} | Memory: {memory}")
+        if status == 'green':
+            print(f'Cluster   {name} (\033[92m{status}\033[0m)')
+        elif status == 'yellow':
+            print(f'Cluster   {name} (\033[93m{status}\033[0m)')
+        elif status == 'red':
+            print(f'Cluster   {name} (\033[91m{status}\033[0m)')
+        
+        print(f'\nNodes     {nodes["total"]} Total, {nodes["successful"]} Successful, {nodes["failed"]} Failed')
 
-    indices_stats = es.cat.indices(format="json")
+        nodes_info = es.nodes.info()
 
-    #print('          |')
-    print('')
-    
-    print(f'Indices   {indices["total"]:,} Total {indices["shards"]:,}, Shards')
-    for index in indices_stats:
-        index_name = index['index']
-        document_count = f'{int(index['docs.count']):,}'
-        store_size = index['store.size']
-        number_of_shards = int(index['pri'])  # primary shards
-        number_of_replicas = int(index['rep'])  # replicas
+        for node_id, node_info in nodes_info['nodes'].items():
+            node_name = node_info['name']
+            transport_address = node_info['transport_address']
+            #node_stats = es.nodes.stats(node_id=node_id)
+            version = node_info['version']
+            memory = bytes_to_human_readable(int(node_info['settings']['node']['attr']['ml']['machine_memory']))
+            print(f"          {node_name.ljust(7)} | Host: {transport_address.rjust(21)} | Version: {version.ljust(7)} | Processors: {node_info['os']['available_processors']} | Memory: {memory}")
 
-        if index_name.startswith('.') or document_count == '0':
-            continue
+        indices_stats = es.cat.indices(format="json")
+        
+        print(f'\nIndices   {indices["total"]:,} Total {indices["shards"]:,}, Shards')
+        for index in indices_stats:
+            index_name = index['index']
+            document_count = f'{int(index['docs.count']):,}'
+            store_size = index['store.size']
+            number_of_shards = int(index['pri'])  # primary shards
+            number_of_replicas = int(index['rep'])  # replicas
 
-        print(f"          {index_name.ljust(15)} | Documents: {document_count.rjust(15)} | {store_size.rjust(7)} [Shards: {number_of_shards:,}, Replicas: {number_of_replicas:,}]")
+            if index_name.startswith('.') or document_count == '0':
+                continue
 
-    dox = f'{indices["docs"]:,}'
-    print('')
-    print(f'Total {dox.rjust(48)} {indices["size"].rjust(9)}')
+            print(f"          {index_name.ljust(15)} | Documents: {document_count.rjust(15)} | {store_size.rjust(7)} [Shards: {number_of_shards:,}, Replicas: {number_of_replicas:,}]")
+
+        dox = f'{indices["docs"]:,}'
+
+        print(f'\nTotal {dox.rjust(48)} {indices["size"].rjust(9)}')
 
 if __name__ == '__main__':
     main()

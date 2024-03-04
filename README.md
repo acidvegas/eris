@@ -56,15 +56,35 @@ python eris.py [options] <input>
 | `--massdns`       | Index massdns records  |
 | `--zone`          | Index zone DNS records |
 
-Using `--batch-threads` as 4 and `--batch-size` as 10000 with 3 nodes would process 120,000 records before indexing 40,000 per node. Take these kind of metrics int account when consider how much records you want to process at once and the memory limitations of your environment, aswell as the networking constraint it may have ono your node(s), depending on the size of your cluster.
+Using `--batch-threads` as 4 and `--batch-size` as 10000 with 3 nodes would process 120,000 records before indexing 40,000 per node. Take these kind of metrics into account when consider how much records you want to process at once and the memory limitations of your environment, aswell as the networking constraint it may have ono your node(s), depending on the size of your cluster.
 
-## Operations
 This ingestion suite will use the built in node sniffer, so by connecting to a single node, you can load balance across the entire cluster.
 It is good to know how much nodes you have in the cluster to determine how to fine tune the arguments for the best performance, based on your environment.
+
+## GeoIP Pipeline
+Create & add a geoip pipeline and use the following in your index mappings:
+
+```json
+"geoip": {
+    "city_name": "City",
+    "continent_name": "Continent",
+    "country_iso_code": "CC",
+    "country_name": "Country",
+    "location": {
+        "lat": 0.0000,
+        "lon": 0.0000
+    },
+    "region_iso_code": "RR",
+    "region_name": "Region"
+}
+```
 
 ## Changelog
 - The `--watch` feature now uses a FIFO to do live ingestion.
 - Isolated eris.py into it's own file and seperated the ingestion agents into their own modules.
+
+## Roadmap
+- Implement [async elasticsearch](https://elasticsearch-py.readthedocs.io/en/v8.12.1/async.html) into the code.
 
 ___
 

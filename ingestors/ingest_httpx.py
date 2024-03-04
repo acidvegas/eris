@@ -53,7 +53,7 @@ def process_file(file_path: str):
 Example record:
 {
     "timestamp":"2024-01-14T13:08:15.117348474-05:00", # Rename to seen and remove milliseconds and offset
-    "hash": {
+    "hash": { # Do we need all of these ?
         "body_md5":"4ae9394eb98233b482508cbda3b33a66",
         "body_mmh3":"-4111954",
         "body_sha256":"89e06e8374353469c65adb227b158b265641b424fba7ddb2c67eef0c4c1280d3",
@@ -64,19 +64,19 @@ Example record:
         "header_simhash":"10962523587435277678"
     },
     "port":"443",
-    "url":"https://supernets.org",
+    "url":"https://supernets.org", # Remove this and only use the input field as "domain" maybe
     "input":"supernets.org", # rename to domain
     "title":"SuperNETs",
     "scheme":"https",
     "webserver":"nginx",
     "body_preview":"SUPERNETS Home About Contact Donate Docs Network IRC Git Invidious Jitsi LibreX Mastodon Matrix Sup",
     "content_type":"text/html",
-    "method":"GET",
+    "method":"GET", # Do we need this ?
     "host":"51.89.151.158",
     "path":"/",
     "favicon":"-674048714",
     "favicon_path":"/i/favicon.png",
-    "time":"592.907689ms",
+    "time":"592.907689ms", # Do we need this ?
     "a":[
         "6.150.220.23"
     ],
@@ -85,12 +85,12 @@ Example record:
         "HSTS",
         "Nginx"
     ],
-    "words":436,
-    "lines":79,
-    "status_code":200,
+    "words":436, # Do we need this ?
+    "lines":79, # Do we need this ?
+    "status_code":200, 
     "content_length":4597,
-    "failed":false,
-    "knowledgebase":{
+    "failed":false, # Do we need this ?
+    "knowledgebase":{ # Do we need this ?
         "PageType":"nonerror",
         "pHash":0
     }

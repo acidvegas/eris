@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # Elasticsearch Recon Ingestion Scripts (ERIS) - Developed by Acidvegas (https://git.acid.vegas/eris)
+# eris.py [asyncronous developement]
 
 import argparse
 import logging
@@ -11,8 +12,9 @@ import sys
 sys.dont_write_bytecode = True
 
 try:
-    from elasticsearch import Elasticsearch, helpers
+    from elasticsearch import AsyncElasticsearch
     from elasticsearch.exceptions import NotFoundError
+    from elasticsearch.helpers import async_streaming_bulk
 except ImportError:
     raise ImportError('Missing required \'elasticsearch\' library. (pip install elasticsearch)')
 
@@ -28,7 +30,6 @@ class ElasticIndexer:
         :param args: Parsed arguments from argparse
         '''
 
-        self.chunk_max = args.chunk_max * 1024 * 1024 # MB
         self.chunk_size = args.chunk_size
         self.chunk_threads = args.chunk_threads
         self.dry_run = args.dry_run
@@ -42,13 +43,13 @@ class ElasticIndexer:
                 'request_timeout': args.timeout,
                 'max_retries': args.retries,
                 'retry_on_timeout': True,
-                'sniff_on_start': False,
+                'sniff_on_start': True, # Is this problematic? 
                 'sniff_on_node_failure': True,
                 'min_delay_between_sniffing': 60 # Add config option for this?
             }
 
             if args.api_key:
-                es_config['headers'] = {'Authorization': f'ApiKey {args.api_key}'}
+                es_config['api_key'] = (args.key, '') # Verify this is correct
             else:
                 es_config['basic_auth'] = (args.user, args.password)
                 
@@ -57,10 +58,10 @@ class ElasticIndexer:
             self.es = sniff_patch.init_elasticsearch(**es_config)
 
             # Remove the above and uncomment the below if the bug is fixed in the Elasticsearch client:
-            #self.es = Elasticsearch(**es_config)
+            #self.es = AsyncElasticsearch(**es_config)
 
 
-    def create_index(self, map_body: dict, pipeline: str = '', replicas: int = 1, shards: int = 1, ):
+    async def create_index(self, map_body: dict, pipeline: str = '', replicas: int = 1, shards: int = 1, ):
         '''
         Create the Elasticsearch index with the defined mapping.
         
@@ -69,7 +70,7 @@ class ElasticIndexer:
         :param shards: Number of shards for the index
         '''
 
-        if self.es.indices.exists(index=self.es_index):
+        if await self.es.indices.exists(index=self.es_index):
             logging.info(f'Index \'{self.es_index}\' already exists.')
             return
 
@@ -82,13 +83,13 @@ class ElasticIndexer:
 
         if pipeline:
             try:
-                self.es.ingest.get_pipeline(id=pipeline)
+                await self.es.ingest.get_pipeline(id=pipeline)
                 logging.info(f'Using ingest pipeline \'{pipeline}\' for index \'{self.es_index}\'')
                 mapping['settings']['index.default_pipeline'] = pipeline
             except NotFoundError:
                 raise ValueError(f'Ingest pipeline \'{pipeline}\' does not exist.')
 
-        response = self.es.indices.create(index=self.es_index, body=mapping)
+        response = await self.es.indices.create(index=self.es_index, body=mapping)
 
         if response.get('acknowledged') and response.get('shards_acknowledged'):
             logging.info(f'Index \'{self.es_index}\' successfully created.')
@@ -96,62 +97,52 @@ class ElasticIndexer:
             raise Exception(f'Failed to create index. ({response})')
 
 
-    def get_cluster_health(self) -> dict:
+    async def get_cluster_health(self) -> dict:
         '''Get the health of the Elasticsearch cluster.'''
 
-        return self.es.cluster.health()
+        return await self.es.cluster.health()
     
 
-    def get_cluster_size(self) -> int:
+    async def get_cluster_size(self) -> int:
         '''Get the number of nodes in the Elasticsearch cluster.'''
 
-        cluster_stats = self.es.cluster.stats()
+        cluster_stats = await self.es.cluster.stats()
         number_of_nodes = cluster_stats['nodes']['count']['total']
 
         return number_of_nodes
 
 
-    def bulk_index(self, documents: list, file_path: str, count: int):
+    async def async_bulk_index_data(self, file_path: str, index_name: str, data_generator: callable):
         '''
-        Index a batch of documents to Elasticsearch.
+        Index records in chunks to Elasticsearch.
+
+        :param file_path: Path to the file
+        :param index_name: Name of the index
+        :param data_generator: Generator for the records to index
+        '''
+
+        count = 0
+        total = 0
         
-        :param documents: List of documents to index
-        :param file_path: Path to the file being indexed
-        :param count: Total number of records processed
-        '''
+        async for ok, result in async_streaming_bulk(self.es, index_name=self.es_index, actions=data_generator(file_path), chunk_size=self.chunk_size):
+            action, result = result.popitem()
 
-        remaining_documents = documents
+            if not ok:
+                logging.error(f'Failed to index document ({result["_id"]}) to {index_name} from {file_path} ({result})')
+                input('Press Enter to continue...') # Debugging (will possibly remove this since we have retries enabled)
+                continue
 
-        parallel_bulk_config = {
-            'client': self.es,
-            'chunk_size': self.chunk_size,
-            'max_chunk_bytes': self.chunk_max,
-            'thread_count': self.chunk_threads,
-            'queue_size': 2 # Add config option for this?
-        }
+            count += 1
+            total += 1
 
-        while remaining_documents:
-            failed_documents = []
+            if count == self.chunk_size:
+                logging.info(f'Successfully indexed {self.chunk_size:,} ({total:,} processed) records to {self.es_index} from {file_path}')
+                count = 0
 
-            try:
-                for success, response in helpers.parallel_bulk(actions=remaining_documents, **parallel_bulk_config):
-                    if not success:
-                        failed_documents.append(response)
-
-                if not failed_documents:
-                    ingested = parallel_bulk_config['chunk_size'] * parallel_bulk_config['thread_count']
-                    logging.info(f'Successfully indexed {ingested:,} ({count:,} processed) records to {self.es_index} from {file_path}')
-                    break
-
-                else:
-                    logging.warning(f'Failed to index {len(failed_documents):,} failed documents! Retrying...')
-                    remaining_documents = failed_documents
-            except Exception as e:
-                logging.error(f'Failed to index documents! ({e})')
-                time.sleep(30) # Should we add a config option for this?
+        logging.info(f'Finished indexing {self.total:,} records to {self.es_index} from {file_path}')
 
 
-    def process_file(self, file_path: str, batch_size: int, ingest_function: callable):
+    async def process_file(self, file_path: str, ingest_function: callable):
         '''
         Read and index records in batches to Elasticsearch.
 
@@ -161,10 +152,8 @@ class ElasticIndexer:
         '''
 
         count = 0
-        records = []
 
-        for processed in ingest_function(file_path):
-
+        async for processed in ingest_function(file_path):
             if not processed:
                 break
 
@@ -172,16 +161,9 @@ class ElasticIndexer:
                 print(processed)
                 continue
 
-            struct = {'_index': self.es_index, '_source': processed}
-            records.append(struct)
             count += 1
-            
-            if len(records) >= batch_size:
-                self.bulk_index(records, file_path, count)
-                records = []
 
-        if records:
-            self.bulk_index(records, file_path, count)
+            yield {'_index': self.es_index, '_source': processed}
 
 
 def main():
@@ -209,7 +191,6 @@ def main():
     parser.add_argument('--shards', type=int, default=3, help='Number of shards for the index')
     
     # Performance arguments
-    parser.add_argument('--chunk-max', type=int, default=10, help='Maximum size in MB of a chunk')
     parser.add_argument('--chunk-size', type=int, default=50000, help='Number of records to index in a chunk')
     parser.add_argument('--chunk-threads', type=int, default=3, help='Number of threads to use when indexing in chunks')
     parser.add_argument('--retries', type=int, default=60, help='Number of times to retry indexing a chunk before failing')

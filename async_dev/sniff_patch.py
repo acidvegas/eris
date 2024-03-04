@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # Elasticsearch Recon Ingestion Scripts (ERIS) - Developed by Acidvegas (https://git.acid.vegas/eris)
-# sniff_patch.py
+# sniff_patch.py [asyncronous developement]
 
 # Note:
 #   This is a patch for the elasticsearch 8.x client to fix the sniff_* options.
@@ -48,7 +48,7 @@ def _override_async_sniff_callback(basic_auth):
                     '/_nodes/_all/http',
                     headers={
                         'accept': 'application/vnd.elasticsearch+json; compatible-with=8',
-                        'authorization': f'Basic {auth_str}'  # Authorization header
+                        'authorization': f'Basic {auth_str}'  # This auth header is missing in 8.x releases of the client, and causes 401s
                     },
                     request_timeout=(
                         sniff_options.sniff_timeout
@@ -68,8 +68,8 @@ def _override_async_sniff_callback(basic_auth):
                 if not address or ':' not in address:
                     continue
 
-                # Processing address for host and port
                 if '/' in address:
+                    # Support 7.x host/ip:port behavior where http.publish_host has been set.
                     fqdn, ipaddress = address.split('/', 1)
                     host = fqdn
                     _, port_str = ipaddress.rsplit(':', 1)
@@ -85,6 +85,7 @@ def _override_async_sniff_callback(basic_auth):
                 if sniffed_node is None:
                     continue
 
+                # Use the node which was able to make the request as a base.
                 node_configs.append(sniffed_node)
 
             if node_configs:
