@@ -59,7 +59,7 @@ def construct_map() -> dict:
     return mapping
 
 
-async def process_file(file_path: str):
+async def process_data(file_path: str):
     '''
     Read and process Masscan records from the log file.
 
@@ -79,22 +79,29 @@ async def process_file(file_path: str):
             try:
                 record = json.loads(line)
             except json.decoder.JSONDecodeError:
+                # In rare cases, the JSON record may be incomplete or malformed:
+                #   {   "ip": "51.161.12.223",   "timestamp": "1707628302", "ports": [ {"port": 22, "proto": "tcp", "service": {"name": "ssh", "banner":
+                #   {   "ip": "83.66.211.246",   "timestamp": "1706557002"
                 logging.error(f'Failed to parse JSON record! ({line})')
-                input('Press Enter to continue...') # Debugging
+                input('Press Enter to continue...') # Pause for review & debugging (Will remove pausing in production, still investigating the cause of this issue.)
                 continue
+
+            if len(record['ports']) > 1:
+                logging.warning(f'Multiple ports found for record! ({record})')
+                input('Press Enter to continue...') # Pause for review (Will remove pausing in production, still investigating if you ever seen more than one port in a record.)
 
             for port_info in record['ports']:
                 struct = {
-                    'ip': record['ip'],
-                    'port': port_info['port'],
-                    'proto': port_info['proto'],
-                    'seen': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(int(record['timestamp']))),
+                    'ip'    : record['ip'],
+                    'port'  : port_info['port'],
+                    'proto' : port_info['proto'],
+                    'seen'  : time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(int(record['timestamp']))),
                 }
 
                 if 'service' in port_info:
                     if 'name' in port_info['service']:
-                        if port_info['service']['name'] != 'unknown':
-                            struct['service'] = port_info['service']['name']
+                        if (service_name := port_info['service']['name']) not in ('unknown',''):
+                            struct['service'] = service_name
 
                     if 'banner' in port_info['service']:
                         banner = ' '.join(port_info['service']['banner'].split()) # Remove extra whitespace

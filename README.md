@@ -86,6 +86,7 @@ Create & add a geoip pipeline and use the following in your index mappings:
 ## Roadmap
 - Implement [async elasticsearch](https://elasticsearch-py.readthedocs.io/en/v8.12.1/async.html) into the code.
 - WHOIS database ingestion scripts
+- Dynamically update the batch metrics when the sniffer adds or removes nodes
 
 ___
 

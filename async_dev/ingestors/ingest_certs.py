@@ -91,8 +91,12 @@ def construct_map() -> dict:
     return mapping
 
 
-async def process():
-    '''Read and process Certsream records live from the Websocket stream.'''
+async def process_data(file_path: str = None):
+    '''
+    Read and process Certsream records live from the Websocket stream.
+    
+    :param file_path: Path to the Certstream log file (unused, placeholder for consistency with other ingestors)
+    '''
 
     while True:
         try:
@@ -105,6 +109,7 @@ async def process():
                         record = json.loads(line)
                     except json.decoder.JSONDecodeError:
                         logging.error(f'Failed to parse JSON record from Certstream! ({line})')
+                        input('Press Enter to continue...') # Pause the script to allow the user to read the error message
                         continue
 
                     yield record
