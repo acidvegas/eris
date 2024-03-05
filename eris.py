@@ -216,6 +216,7 @@ def main():
     parser.add_argument('--timeout', type=int, default=30, help='Number of seconds to wait before retrying a chunk')
 
     # Ingestion arguments
+    parser.add_argument('--cert', action='store_true', help='Index Certstream records')
     parser.add_argument('--httpx', action='store_true', help='Index Httpx records')
     parser.add_argument('--masscan', action='store_true', help='Index Masscan records')
     parser.add_argument('--massdns', action='store_true', help='Index Massdns records')

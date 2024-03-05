@@ -19,6 +19,11 @@ import logging
 import re
 import time
 
+try:
+    import aiofiles
+except ImportError:
+    raise ImportError('Missing required \'aiofiles\' library. (pip install aiofiles)')
+
 default_index = 'masscan-logs'
 
 def construct_map() -> dict:
@@ -54,15 +59,15 @@ def construct_map() -> dict:
     return mapping
 
 
-def process_file(file_path: str):
+async def process_file(file_path: str):
     '''
     Read and process Masscan records from the log file.
 
     :param file_path: Path to the Masscan log file
     '''
 
-    with open(file_path, 'r') as file:
-        for line in file:
+    async with aiofiles.open(file_path, mode='r') as input_file:
+        async for line in input_file:
             line = line.strip()
 
             if not line or not line.startswith('{'):
