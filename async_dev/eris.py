@@ -215,6 +215,8 @@ def main():
 
     edx = ElasticIndexer(args)
 
+    if args.cert:
+        from ingestors import ingest_certs   as ingestor
     if args.httpx:
         from ingestors import ingest_httpx   as ingestor
     elif args.masscan:
