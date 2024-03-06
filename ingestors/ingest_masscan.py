@@ -19,6 +19,11 @@ import logging
 import re
 import time
 
+try:
+    import aiofiles
+except ImportError:
+    raise ImportError('Missing required \'aiofiles\' library. (pip install aiofiles)')
+
 default_index = 'masscan-logs'
 
 def construct_map() -> dict:
@@ -54,15 +59,15 @@ def construct_map() -> dict:
     return mapping
 
 
-def process_file(file_path: str):
+async def process_data(file_path: str):
     '''
     Read and process Masscan records from the log file.
 
     :param file_path: Path to the Masscan log file
     '''
 
-    with open(file_path, 'r') as file:
-        for line in file:
+    async with aiofiles.open(file_path, mode='r') as input_file:
+        async for line in input_file:
             line = line.strip()
 
             if not line or not line.startswith('{'):
@@ -74,22 +79,29 @@ def process_file(file_path: str):
             try:
                 record = json.loads(line)
             except json.decoder.JSONDecodeError:
+                # In rare cases, the JSON record may be incomplete or malformed:
+                #   {   "ip": "51.161.12.223",   "timestamp": "1707628302", "ports": [ {"port": 22, "proto": "tcp", "service": {"name": "ssh", "banner":
+                #   {   "ip": "83.66.211.246",   "timestamp": "1706557002"
                 logging.error(f'Failed to parse JSON record! ({line})')
-                input('Press Enter to continue...') # Debugging
+                input('Press Enter to continue...') # Pause for review & debugging (Will remove pausing in production, still investigating the cause of this issue.)
                 continue
+
+            if len(record['ports']) > 1:
+                logging.warning(f'Multiple ports found for record! ({record})')
+                input('Press Enter to continue...') # Pause for review (Will remove pausing in production, still investigating if you ever seen more than one port in a record.)
 
             for port_info in record['ports']:
                 struct = {
-                    'ip': record['ip'],
-                    'port': port_info['port'],
-                    'proto': port_info['proto'],
-                    'seen': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(int(record['timestamp']))),
+                    'ip'    : record['ip'],
+                    'port'  : port_info['port'],
+                    'proto' : port_info['proto'],
+                    'seen'  : time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(int(record['timestamp']))),
                 }
 
                 if 'service' in port_info:
                     if 'name' in port_info['service']:
-                        if port_info['service']['name'] != 'unknown':
-                            struct['service'] = port_info['service']['name']
+                        if (service_name := port_info['service']['name']) not in ('unknown',''):
+                            struct['service'] = service_name
 
                     if 'banner' in port_info['service']:
                         banner = ' '.join(port_info['service']['banner'].split()) # Remove extra whitespace
@@ -100,7 +112,7 @@ def process_file(file_path: str):
                             else:
                                 struct['banner'] = banner
 
-                yield struct
+                yield {'_index': default_index, '_source': struct}
  
     return None # EOF
 
@@ -131,6 +143,6 @@ Will be indexed as:
     "service": "ssh",
     "banner": "SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.4",
     "seen": "2021-10-08T02:04:28Z",
-    "ref_id": "?sKfOvsC4M4a2W8PaC4zF?" # TCP RST Payload (Do we need this?)
+    "ref_id": "?sKfOvsC4M4a2W8PaC4zF?" # TCP RST Payload, Might be useful..
 }
 '''

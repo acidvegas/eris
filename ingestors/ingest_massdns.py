@@ -4,6 +4,11 @@
 
 import time
 
+try:
+    import aiofiles
+except ImportError:
+    raise ImportError('Missing required \'aiofiles\' library. (pip install aiofiles)')
+
 default_index = 'ptr-records'
 
 def construct_map() -> dict:
@@ -25,15 +30,15 @@ def construct_map() -> dict:
     return mapping
 
 
-def process_file(file_path: str):
+async def process_data(file_path: str):
     '''
     Read and process Massdns records from the log file.
 
     :param file_path: Path to the Massdns log file
     '''
 
-    with open(file_path, 'r') as file:
-        for line in file:
+    async with aiofiles.open(file_path, mode='r') as input_file:
+        async for line in input_file:
             line = line.strip()
 
             if not line:
@@ -65,7 +70,7 @@ def process_file(file_path: str):
                 'seen': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
             }
 
-            yield struct
+            yield {'_index': default_index, '_source': struct}
     
     return None # EOF
 

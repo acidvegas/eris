@@ -4,11 +4,6 @@
 
 import time
 
-try:
-    import aiofiles
-except ImportError:
-    raise ImportError('Missing required \'aiofiles\' library. (pip install aiofiles)')
-
 default_index = 'dns-zones'
 record_types = ('a','aaaa','caa','cdnskey','cds','cname','dnskey','ds','mx','naptr','ns','nsec','nsec3','nsec3param','ptr','rrsig','rp','sshfp','soa','srv','txt','type65534')
 
@@ -47,7 +42,7 @@ def construct_map() -> dict:
     return mapping
 
 
-async def process_data(file_path: str):
+def process_file(file_path: str):
     '''
     Read and process zone file records.
 
@@ -57,8 +52,8 @@ async def process_data(file_path: str):
     domain_records = {}
     last_domain = None
 
-    async with aiofiles.open(file_path, mode='r') as input_file:
-        async for line in input_file:
+    with open(file_path, 'r') as file:
+        for line in file:
             line = line.strip()
 
             if not line or line.startswith(';'):
@@ -93,11 +88,11 @@ async def process_data(file_path: str):
 
             if domain != last_domain:
                 if last_domain:
-                    struct = {'domain': last_domain, 'records': domain_records[last_domain], 'seen': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}
+                    source = {'domain': last_domain, 'records': domain_records[last_domain], 'seen': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}
                     
                     del domain_records[last_domain]
 
-                    yield {'_index': default_index, '_source': struct}
+                    yield source
 
                 last_domain = domain
 

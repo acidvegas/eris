@@ -4,6 +4,11 @@
 
 import json
 
+try:
+    import aiofiles
+except ImportError:
+    raise ImportError('Missing required \'aiofiles\' library. (pip install aiofiles)')
+
 default_index = 'httpx-logs'
 
 def construct_map() -> dict:
@@ -22,15 +27,15 @@ def construct_map() -> dict:
     return mapping
 
 
-def process_file(file_path: str):
+async def process_data(file_path: str):
     '''
     Read and process HTTPX records from the log file.
 
     :param file_path: Path to the HTTPX log file
     '''
 
-    with open(file_path, 'r') as file:
-        for line in file:
+    async with aiofiles.open(file_path, mode='r') as input_file:
+        async for line in input_file:
             line = line.strip()
 
             if not line:
@@ -43,7 +48,7 @@ def process_file(file_path: str):
 
             del record['failed'], record['knowledgebase'], record['time']
 
-            yield record
+            yield {'_index': default_index, '_source': record}
 
     return None # EOF
 
