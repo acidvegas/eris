@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # Elasticsearch Recon Ingestion Scripts (ERIS) - Developed by Acidvegas (https://git.acid.vegas/eris)
-# ingest_masscan.py [asyncronous developement]
+# ingest_masscan.py
 
 '''
 apt-get install iptables masscan libpcap-dev screen

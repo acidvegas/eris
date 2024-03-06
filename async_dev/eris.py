@@ -12,7 +12,8 @@ import sys
 sys.dont_write_bytecode = True
 
 try:
-    from elasticsearch import AsyncElasticsearch
+    # This is commented out because there is a bug with the elasticsearch library that requires a patch (see initialize() method below)
+    #from elasticsearch import AsyncElasticsearch 
     from elasticsearch.exceptions import NotFoundError
     from elasticsearch.helpers import async_streaming_bulk
 except ImportError:
@@ -30,10 +31,11 @@ class ElasticIndexer:
         :param args: Parsed arguments from argparse
         '''
 
+        self.chunk_max  = args.chunk_max * 1024 * 1024 # MB
         self.chunk_size = args.chunk_size
         self.es = None
         self.es_index = args.index
-        
+
         self.es_config = {
             'hosts': [f'{args.host}:{args.port}'],
             'verify_certs': args.self_signed,
@@ -127,7 +129,7 @@ class ElasticIndexer:
         count = 0
         total = 0
         
-        async for ok, result in async_streaming_bulk(self.es, actions=data_generator(file_path), chunk_size=self.chunk_size):
+        async for ok, result in async_streaming_bulk(self.es, actions=data_generator(file_path), chunk_size=self.chunk_size, max_chunk_bytes=self.chunk_max):
             action, result = result.popitem()
 
             if not ok:
@@ -155,7 +157,7 @@ async def main():
     parser.add_argument('--watch', action='store_true', help='Create or watch a FIFO for real-time indexing')
     
     # Elasticsearch arguments
-    parser.add_argument('--host', default='localhost', help='Elasticsearch host')
+    parser.add_argument('--host', default='http://localhost/', help='Elasticsearch host')
     parser.add_argument('--port', type=int, default=9200, help='Elasticsearch port')
     parser.add_argument('--user', default='elastic', help='Elasticsearch username')
     parser.add_argument('--password', default=os.getenv('ES_PASSWORD'), help='Elasticsearch password (if not provided, check environment variable ES_PASSWORD)')
@@ -166,12 +168,13 @@ async def main():
     parser.add_argument('--index', help='Elasticsearch index name')
     parser.add_argument('--pipeline', help='Use an ingest pipeline for the index')
     parser.add_argument('--replicas', type=int, default=1, help='Number of replicas for the index')
-    parser.add_argument('--shards', type=int, default=3, help='Number of shards for the index')
+    parser.add_argument('--shards', type=int, default=1, help='Number of shards for the index')
     
     # Performance arguments
     parser.add_argument('--chunk-size', type=int, default=50000, help='Number of records to index in a chunk')
-    parser.add_argument('--retries', type=int, default=60, help='Number of times to retry indexing a chunk before failing')
-    parser.add_argument('--timeout', type=int, default=30, help='Number of seconds to wait before retrying a chunk')
+    parser.add_argument('--chunk-max', type=int, default=100, help='Maximum size of a chunk in bytes')
+    parser.add_argument('--retries', type=int, default=100, help='Number of times to retry indexing a chunk before failing')
+    parser.add_argument('--timeout', type=int, default=60, help='Number of seconds to wait before retrying a chunk')
 
     # Ingestion arguments
     parser.add_argument('--cert', action='store_true', help='Index Certstream records')
