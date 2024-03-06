@@ -1,6 +1,8 @@
 # Elasticsearch Recon Ingestion Scripts (ERIS)
 > A utility for ingesting various large scale reconnaissance data logs into Elasticsearch
 
+The is a suite of tools to aid in the ingestion of recon data from various sources *(httpx, masscan, zonefiles, etc)* into an [Elasticsearch](https://www.elastic.co/elasticsearch) cluster. The entire codebase is designed with asynconous processing, aswell as load balancing ingestion across all of the nodes in your cluster. Additionally, live data ingestion is supported from many of the sources supported. This means data can be directly processed and ingested into your Elasticsearch cluster instantly. The structure allows for the developement of "modules" or "plugins" if you will, to quickly create custom ingestion helpers for anything!
+
 ## Prerequisites
 - [python](https://www.python.org/)
     - [elasticsearch](https://pypi.org/project/elasticsearch/) *(`pip install elasticsearch`)*
@@ -84,9 +86,9 @@ Create & add a geoip pipeline and use the following in your index mappings:
 - Isolated eris.py into it's own file and seperated the ingestion agents into their own modules.
 
 ## Roadmap
-- Fix issue with `ingest_certs.py` and not needing to pass a file to it
-- WHOIS database ingestion scripts
-- Dynamically update the batch metrics when the sniffer adds or removes nodes
+- Fix issue with `ingest_certs.py` and not needing to pass a file to it.
+- Create a module for RIR database ingestion *(WHOIS, delegations, transfer, ASN mapping, peering, etc)*
+- Dynamically update the batch metrics when the sniffer adds or removes nodes.
 
 ___
 
