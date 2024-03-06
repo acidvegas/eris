@@ -17,14 +17,14 @@ record_types  = ('a','aaaa','caa','cdnskey','cds','cname','dnskey','ds','mx','na
 def construct_map() -> dict:
     '''Construct the Elasticsearch index mapping for zone file records.'''
 
-    keyword_mapping = { 'type': 'text',  'fields': { 'keyword': { 'type': 'keyword', 'ignore_above': 256 } } }
+    keyword_mapping = { 'type': 'text', 'fields': { 'keyword': { 'type': 'keyword', 'ignore_above': 256 } } }
 
     mapping = {
         'mappings': {
             'properties': {
-                'domain':  keyword_mapping,
-                'records': { 'properties': {} },
-                'seen':    {'type': 'date'}
+                'domain'  : keyword_mapping,
+                'records' : { 'properties': {} },
+                'seen'    : { 'type': 'date' }
             }
         }
     }
@@ -93,7 +93,7 @@ async def process_data(file_path: str):
             if record_type == 'nsec':
                 data = ' '.join([data.split()[0].rstrip('.'), *data.split()[1:]])
             elif record_type == 'soa':
-                    data = ' '.join([part.rstrip('.') if '.' in part else part for part in data.split()])
+                data = ' '.join([part.rstrip('.') if '.' in part else part for part in data.split()])
             elif data.endswith('.'):
                 data = data.rstrip('.')
 

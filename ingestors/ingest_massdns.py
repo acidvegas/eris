@@ -15,15 +15,15 @@ default_index = 'ptr-records'
 def construct_map() -> dict:
     '''Construct the Elasticsearch index mapping for MassDNS records'''
 
-    keyword_mapping = { 'type': 'text',  'fields': { 'keyword': { 'type': 'keyword', 'ignore_above': 256 } } }
+    keyword_mapping = { 'type': 'text', 'fields': { 'keyword': { 'type': 'keyword', 'ignore_above': 256 } } }
 
     mapping = {
         'mappings': {
                 'properties': {
-                    'ip'     : { 'type' : 'ip' },
-                    'name'   : { 'type' : 'keyword' },
+                    'ip'     : { 'type': 'ip' },
+                    'name'   : { 'type': 'keyword' },
                     'record' : keyword_mapping,
-                    'seen'   : { 'type' : 'date' }
+                    'seen'   : { 'type': 'date' }
                 }
             }
         }

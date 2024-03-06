@@ -16,7 +16,7 @@ default_index = 'cert-stream'
 def construct_map() -> dict:
     '''Construct the Elasticsearch index mapping for Certstream records.'''
 
-    keyword_mapping = { 'type': 'text',  'fields': { 'keyword': { 'type': 'keyword', 'ignore_above': 256 } } }
+    keyword_mapping = { 'type': 'text', 'fields': { 'keyword': { 'type': 'keyword', 'ignore_above': 256 } } }
 
     mapping = {
         'mappings': {
@@ -24,8 +24,8 @@ def construct_map() -> dict:
                 'data': {
                     'properties': {
                         'cert_index': { 'type': 'integer' },
-                        'cert_link': { 'type': 'keyword' },
-                        'leaf_cert': {
+                        'cert_link' : { 'type': 'keyword' },
+                        'leaf_cert' : {
                             'properties': {
                                 'all_domains': { 'type': 'keyword' },
                                 'extensions': {
@@ -55,10 +55,10 @@ def construct_map() -> dict:
                                         'emailAddress' : { 'type': 'text'    }
                                     }
                                 },
-                                'not_after': { 'type': 'integer' },
-                                'not_before': { 'type': 'integer' },
-                                'serial_number': { 'type': 'keyword' },
-                                'signature_algorithm': { 'type': 'text' },
+                                'not_after'           : { 'type': 'integer' },
+                                'not_before'          : { 'type': 'integer' },
+                                'serial_number'       : { 'type': 'keyword' },
+                                'signature_algorithm' : { 'type': 'text' },
                                 'subject': {
                                     'properties': {
                                         'C'            : { 'type': 'keyword' },
