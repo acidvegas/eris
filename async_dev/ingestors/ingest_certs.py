@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # Elasticsearch Recon Ingestion Scripts (ERIS) - Developed by Acidvegas (https://git.acid.vegas/eris)
-# ingest_certstream.py
+# ingest_certs.py
 
 import asyncio
 import json
@@ -121,6 +121,35 @@ async def process_data(file_path: str = None):
         except Exception as e:
             logging.error(f'An error occurred while processing Certstream records! ({e})')
             await asyncio.sleep(10)
+
+
+async def strip_struct_empty(data: dict) -> dict:
+    '''
+    Recursively remove empty values from a nested dictionary or list.
+    
+    :param data: The dictionary or list to clean.
+    '''
+
+    empties = [None, '', [], {}]
+
+    if isinstance(data, dict):
+        for key, value in list(data.items()):
+            if value in empties:
+                del data[key]
+            else:
+                cleaned_value = strip_struct_empty(value)
+                if cleaned_value in empties:
+                    del data[key]
+                else:
+                    data[key] = cleaned_value
+
+        return data
+    
+    elif isinstance(data, list):
+        return [strip_struct_empty(item) for item in data if item not in empties and strip_struct_empty(item) not in empties]
+
+    else:
+        return data
 
 
 
