@@ -41,12 +41,12 @@ python eris.py [options] <input>
 | `--shards`   | Number of shards for the index       | `1`                 |
 
 ###### Performance arguments
-| Argument          | Description                                              | Default |
-|-------------------|----------------------------------------------------------|---------|
-| `--chunk-max`     | Maximum size in MB of a chunk                            | `100`   |
-| `--chunk-size`    | Number of records to index in a chunk                    | `50000` |
-| `--retries`       | Number of times to retry indexing a chunk before failing | `100`   |
-| `--timeout`       | Number of seconds to wait before retrying a chunk        | `60`    |
+| Argument       | Description                                              | Default |
+|----------------|----------------------------------------------------------|---------|
+| `--chunk-max`  | Maximum size in MB of a chunk                            | `100`   |
+| `--chunk-size` | Number of records to index in a chunk                    | `50000` |
+| `--retries`    | Number of times to retry indexing a chunk before failing | `100`   |
+| `--timeout`    | Number of seconds to wait before retrying a chunk        | `60`    |
 
 ###### Ingestion arguments
 | Argument    | Description              |
