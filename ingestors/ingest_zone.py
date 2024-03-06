@@ -147,3 +147,8 @@ Will be indexed as:
     }
 }
 '''
+
+'''
+Notes:
+- How do we want to handle hashed NSEC3 records? Do we ignest them as they are, or crack the NSEC3 hashes first and ingest?
+'''
