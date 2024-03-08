@@ -64,7 +64,6 @@ It is good to know how much nodes you have in the cluster to determine how to fi
 ## Roadmap
 - Create a module for RIR database ingestion *(WHOIS, delegations, transfer, ASN mapping, peering, etc)*
 - Dynamically update the batch metrics when the sniffer adds or removes nodes.
-- Fix issue with `ingest_certs.py` and not needing to pass a file to it.
 
 ___
 
