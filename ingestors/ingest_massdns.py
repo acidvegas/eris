@@ -39,7 +39,7 @@ async def process_data(file_path: str):
     :param file_path: Path to the Massdns log file
     '''
 
-    async with aiofiles.open(file_path, mode='r') as input_file:
+    async with aiofiles.open(file_path) as input_file:
 
         last = None
 
@@ -152,7 +152,7 @@ Output:
 Input:
     {
         "_id"     : "47.229.6.0"
-        "_index"  : "ptr-records",
+        "_index"  : "eris-massdns",
         "_source" : {
             "ip"     : "47.229.6.0",
             "record" : "047-229-006-000.res.spectrum.com", # This will be a list if there are more than one PTR record
@@ -161,6 +161,6 @@ Input:
     }
 
 Notes:
-- Why do some IP addresses return a CNAME from a PTR request
-- What is dns-servfail.net (Frequent CNAME response from PTR requests)
+    Why do some IP addresses return a CNAME from a PTR request
+    What is dns-servfail.net (Frequent CNAME response from PTR requests)
 '''

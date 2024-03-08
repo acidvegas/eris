@@ -64,7 +64,7 @@ async def process_data(file_path: str):
     :param file_path: Path to the HTTPX log file
     '''
 
-    async with aiofiles.open(file_path, mode='r') as input_file:
+    async with aiofiles.open(file_path) as input_file:
         async for line in input_file:
             line = line.strip()
 
