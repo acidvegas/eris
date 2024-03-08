@@ -60,35 +60,10 @@ python eris.py [options] <input>
 This ingestion suite will use the built in node sniffer, so by connecting to a single node, you can load balance across the entire cluster.
 It is good to know how much nodes you have in the cluster to determine how to fine tune the arguments for the best performance, based on your environment.
 
-## GeoIP Pipeline
-Create & add a geoip pipeline and use the following in your index mappings:
-
-```json
-"geoip": {
-    "city_name": "City",
-    "continent_name": "Continent",
-    "country_iso_code": "CC",
-    "country_name": "Country",
-    "location": {
-        "lat": 0.0000,
-        "lon": 0.0000
-    },
-    "region_iso_code": "RR",
-    "region_name": "Region"
-}
-```
-
-## Changelog
-- Added ingestion script for certificate transparency logs in real time using websockets.
-- `--dry-run` removed as this nears production level
-- Implemented [async elasticsearch](https://elasticsearch-py.readthedocs.io/en/latest/async.html) into the codebase & refactored some of the logic to accomadate.
-- The `--watch` feature now uses a FIFO to do live ingestion.
-- Isolated eris.py into it's own file and seperated the ingestion agents into their own modules.
-
 ## Roadmap
-- Fix issue with `ingest_certs.py` and not needing to pass a file to it.
 - Create a module for RIR database ingestion *(WHOIS, delegations, transfer, ASN mapping, peering, etc)*
 - Dynamically update the batch metrics when the sniffer adds or removes nodes.
+- Fix issue with `ingest_certs.py` and not needing to pass a file to it.
 
 ___
 

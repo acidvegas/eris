@@ -11,7 +11,9 @@ try:
 except ImportError:
     raise ImportError('Missing required \'aiofiles\' library. (pip install aiofiles)')
 
+
 default_index = 'masscan-logs'
+
 
 def construct_map() -> dict:
     '''Construct the Elasticsearch index mapping for Masscan records.'''
@@ -33,12 +35,16 @@ def construct_map() -> dict:
             'properties': {
                 'ip'      : { 'type': 'ip' },
                 'port'    : { 'type': 'integer' },
-                'proto'   : { 'type': 'keyword' },
-                'service' : { 'type': 'keyword' },
-                'banner'  : keyword_mapping,
-                #'geoip'  : { 'properties': geoip_mapping } # Used witht he geoip pipeline to enrich the data
-                'seen'    : { 'type': 'date' }
-                
+                'data'    : {
+                    'properties': {
+                        'proto'   : { 'type': 'keyword' },
+                        'service' : { 'type': 'keyword' },
+                        'banner'  : keyword_mapping,
+                        'seen'    : { 'type': 'date' }
+                    }
+                },
+                #'geoip'    : { 'properties': geoip_mapping } # Used with the geoip pipeline to enrich the data
+                'last_seen' : { 'type': 'date' }                
             }
         }
     }
@@ -70,8 +76,8 @@ async def process_data(file_path: str):
                 record = json.loads(line)
             except json.decoder.JSONDecodeError:
                 # In rare cases, the JSON record may be incomplete or malformed:
-                #   {   "ip": "51.161.12.223",   "timestamp": "1707628302", "ports": [ {"port": 22, "proto": "tcp", "service": {"name": "ssh", "banner":
-                #   {   "ip": "83.66.211.246",   "timestamp": "1706557002"
+                #   { "ip": "51.161.12.223", "timestamp": "1707628302", "ports": [ {"port": 22, "proto": "tcp", "service": {"name": "ssh", "banner":
+                #   { "ip": "83.66.211.246", "timestamp": "1706557002"
                 logging.error(f'Failed to parse JSON record! ({line})')
                 input('Press Enter to continue...') # Pause for review & debugging (remove this in production)
                 continue
@@ -83,10 +89,13 @@ async def process_data(file_path: str):
 
             for port_info in record['ports']:
                 struct = {
-                    'ip'    : record['ip'],
-                    'port'  : port_info['port'],
-                    'proto' : port_info['proto'],
-                    'seen'  : time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(int(record['timestamp']))),
+                    'ip'   : record['ip'],
+                    'data' : {
+                        'port'  : port_info['port'],
+                        'proto' : port_info['proto'],
+                        'seen'  : time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(int(record['timestamp']))),
+                    },
+                    'last_seen' : time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(int(record['timestamp']))),
                 }
 
                 if 'service' in port_info:
