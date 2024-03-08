@@ -48,7 +48,8 @@ async def process_data(file_path: str):
 
             # Sentinel value to indicate the end of a process (for closing out a FIFO stream)
             if line == '~eof':
-                return last
+                yield last
+                break
 
             # Skip empty lines
             if not line:
@@ -61,50 +62,47 @@ async def process_data(file_path: str):
             if len(parts) < 3:
                 logging.warning(f'Invalid PTR record: {line}')
                 continue
-            
+
             # Split the PTR record into its parts
             name, record_type, record = parts[0].rstrip('.'), parts[1], ' '.join(parts[2:]).rstrip('.')
 
             # Do not index other records
             if record_type != 'PTR':
-                logging.warning(f'Invalid record type: {record_type}: {line}')
                 continue
 
             # Do not index PTR records that do not have a record
             if not record:
-                logging.warning(f'Empty PTR record: {line}')
                 continue
 
             # Let's not index the PTR record if it's the same as the in-addr.arpa domain
             if record == name:
-                logging.warning(f'PTR record is the same as the in-addr.arpa domain: {line}')
                 continue
-            
+
             # Get the IP address from the in-addr.arpa domain
             ip = '.'.join(name.replace('.in-addr.arpa', '').split('.')[::-1])
 
             # Check if we are still processing the same IP address
             if last:
                 if ip == last['_id']:
-                    last_record = last['_doc']['record']
+                    last_record = last['doc']['record']
                     if isinstance(last_record, list):
                         if record not in last_record:
-                            last['_doc']['record'].append(record)
+                            last['doc']['record'].append(record)
                         else:
                             logging.warning(f'Duplicate PTR record: {line}')
                     else:
                         if record != last_record:
-                            last['_doc']['record'] = [last_record, record] # IP addresses with more than one PTR record will turn into a list
+                            last['doc']['record'] = [last_record, record] # IP addresses with more than one PTR record will turn into a list
                     continue
                 else:
-                    yield last
-            
+                    yield last # Return the last document and start a new one
+
             # Cache the this document in-case we have more for the same IP address
             last = {
                 '_op_type' : 'update',
                 '_id'      : ip,
                 '_index'   : default_index,
-                '_doc'     : {
+                'doc'      : {
                     'ip'     : ip,
                     'record' : record,
                     'seen'   : time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
@@ -116,7 +114,7 @@ async def process_data(file_path: str):
 async def test(input_path: str):
     '''
     Test the MassDNS ingestion process
-    
+
     :param input_path: Path to the MassDNS log file
     '''
     async for document in process_data(input_path):
@@ -131,16 +129,17 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='MassDNS Ingestor for ERIS')
     parser.add_argument('input_path', help='Path to the input file or directory')
     args = parser.parse_args()
-    
+
     asyncio.run(test(args.input_path))
 
 
 
 '''
 Deployment:
+    sudo apt-get install build-essential gcc make
     git clone --depth 1 https://github.com/blechschmidt/massdns.git $HOME/massdns && cd $HOME/massdns && make
     curl -s https://public-dns.info/nameservers.txt | grep -v ':' > $HOME/massdns/nameservers.txt
-    pythons ./scripts/ptr.py | ./bin/massdns -r $HOME/massdns/nameservers.txt -t PTR --filter NOERROR-s 1000 -o S -w $HOME/massdns/fifo.json
+    python3 ./scripts/ptr.py | ./bin/massdns -r $HOME/massdns/nameservers.txt -t PTR --filter NOERROR-s 500 -o S -w $HOME/massdns/fifo.json
     or...
     while true; do python ./scripts/ptr.py | ./bin/massdns -r $HOME/massdns/nameservers.txt -t PTR --filter NOERROR -s 1000 -o S -w $HOME/massdns/fifo.json; done
 
