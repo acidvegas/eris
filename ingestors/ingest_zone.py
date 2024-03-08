@@ -119,36 +119,50 @@ async def process_data(file_path: str):
             domain_records[domain][record_type].append({'ttl': ttl, 'data': data})
 
 
+async def test(input_path: str):
+    '''
+    Test the Zone file ingestion process
+    
+    :param input_path: Path to the MassDNS log file
+    '''
+    async for document in process_data(input_path):
+        print(document)
+
+
+
+if __name__ == '__main__':
+    import argparse
+    import asyncio
+
+    parser = argparse.ArgumentParser(description='Zone file Ingestor for ERIS')
+    parser.add_argument('input_path', help='Path to the input file or directory')
+    args = parser.parse_args()
+    
+    asyncio.run(test(args.input_path))
+
+
 
 '''
-Example record:
-0so9l9nrl425q3tf7dkv1nmv2r3is6vm.vegas. 3600    in  nsec3   1 1 100 332539EE7F95C32A 10MHUKG4FHIAVEFDOTF6NKU5KFCB2J3A NS DS RRSIG
-0so9l9nrl425q3tf7dkv1nmv2r3is6vm.vegas. 3600    in  rrsig   NSEC3 8 2 3600 20240122151947 20240101141947 4125 vegas. hzIvQrZIxBSwRWyiHkb5M2W0R3ikNehv884nilkvTt9DaJSDzDUrCtqwQb3jh6+BesByBqfMQK+L2n9c//ZSmD5/iPqxmTPCuYIB9uBV2qSNSNXxCY7uUt5w7hKUS68SLwOSjaQ8GRME9WQJhY6gck0f8TT24enjXXRnQC8QitY=
-1-800-flowers.vegas.    3600    in  ns  dns1.cscdns.net.
-1-800-flowers.vegas.    3600    in  ns  dns2.cscdns.net.
-100.vegas.  3600    in  ns  ns51.domaincontrol.com.
-100.vegas.  3600    in  ns  ns52.domaincontrol.com.
-1001.vegas. 3600    in  ns  ns11.waterrockdigital.com.
-1001.vegas. 3600    in  ns  ns12.waterrockdigital.com.
+Output:
+    1001.vegas. 3600    in  ns  ns11.waterrockdigital.com.
+    1001.vegas. 3600    in  ns  ns12.waterrockdigital.com.
 
-Will be indexed as:
-{
-    "_id"     : "1001.vegas"
-    "_index"  : "dns-zones",
-    "_source" : {
-        "domain"  : "1001.vegas",        
-        "records" : { # All records are stored in a single dictionary
-            "ns": [
-                {"ttl": 3600, "data": "ns11.waterrockdigital.com"},
-                {"ttl": 3600, "data": "ns12.waterrockdigital.com"}
-            ]
-        },
-        "seen"    : "2021-09-01T00:00:00Z" # Zulu time added upon indexing
+Input:
+    {
+        "_id"     : "1001.vegas"
+        "_index"  : "dns-zones",
+        "_source" : {
+            "domain"  : "1001.vegas",        
+            "records" : {
+                "ns": [
+                    {"ttl": 3600, "data": "ns11.waterrockdigital.com"},
+                    {"ttl": 3600, "data": "ns12.waterrockdigital.com"}
+                ]
+            },
+            "seen"    : "2021-09-01T00:00:00Z"
+        }
     }
-}
-'''
 
-'''
 Notes:
-- How do we want to handle hashed NSEC3 records? Do we ignest them as they are, or crack the NSEC3 hashes first and ingest?
+    How do we want to handle hashed NSEC3 records? Do we ignest them as they are, or crack the NSEC3 hashes first and ingest?
 '''

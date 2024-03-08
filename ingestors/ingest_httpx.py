@@ -82,45 +82,72 @@ async def process_data(file_path: str):
             yield {'_id': record['domain'], '_index': default_index, '_source': record}
 
 
+async def test(input_path: str):
+    '''
+    Test the HTTPX ingestion process
+    
+    :param input_path: Path to the HTTPX log file
+    '''
+    async for document in process_data(input_path):
+        print(document)
+
+
+
+if __name__ == '__main__':
+    import argparse
+    import asyncio
+
+    parser = argparse.ArgumentParser(description='HTTPX Ingestor for ERIS')
+    parser.add_argument('input_path', help='Path to the input file or directory')
+    args = parser.parse_args()
+    
+    asyncio.run(test(args.input_path))
+
+
   
 ''''
-Example record:
-{
-    "timestamp":"2024-01-14T13:08:15.117348474-05:00", # Rename to seen and remove milliseconds and offset
-    "hash": { # Do we need all of these ?
-        "body_md5"       : "4ae9394eb98233b482508cbda3b33a66",
-        "body_mmh3"      : "-4111954",
-        "body_sha256"    : "89e06e8374353469c65adb227b158b265641b424fba7ddb2c67eef0c4c1280d3",
-        "body_simhash"   : "9814303593401624250",
-        "header_md5"     : "980366deb2b2fb5df2ad861fc63e79ce",
-        "header_mmh3"    : "-813072798",
-        "header_sha256"  : "39aea75ad548e38b635421861641ad1919ed3b103b17a33c41e7ad46516f736d",
-        "header_simhash" : "10962523587435277678"
-    },
-    "port"           : "443",
-    "url"            : "https://supernets.org", # Remove this and only use the input field as "domain" maybe
-    "input"          : "supernets.org", # rename to domain
-    "title"          : "SuperNETs",
-    "scheme"         : "https",
-    "webserver"      : "nginx",
-    "body_preview"   : "SUPERNETS Home About Contact Donate Docs Network IRC Git Invidious Jitsi LibreX Mastodon Matrix Sup",
-    "content_type"   : "text/html",
-    "method"         : "GET", # Remove this
-    "host"           : "51.89.151.158",
-    "path"           : "/",
-    "favicon"        : "-674048714",
-    "favicon_path"   : "/i/favicon.png",
-    "time"           : "592.907689ms", # Do we need this ?
-    "a"              : ["6.150.220.23"],
-    "tech"           : ["Bootstrap:4.0.0", "HSTS", "Nginx"],
-    "words"          : 436, # Do we need this ?
-    "lines"          : 79, # Do we need this ?
-    "status_code"    : 200, 
-    "content_length" : 4597,
-    "failed"         : false, # Do we need this ?
-    "knowledgebase"  : { # Do we need this ?
-        "PageType" : "nonerror",
-        "pHash"    : 0
+Deploy:
+    go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest 
+    curl -s https://public-dns.info/nameservers.txt -o nameservers.txt
+    httpx -l zone.txt -t 200 -sc -location -favicon -title -bp -td -ip -cname -mc 200,201,301,302,303,307,308 -fr -r nameservers.txt -retries 2 -stream -sd -j -o httpx.json -v
+    
+Output:
+    {
+        "timestamp":"2024-01-14T13:08:15.117348474-05:00", # Rename to seen and remove milliseconds and offset
+        "hash": { # Do we need all of these ?
+            "body_md5"       : "4ae9394eb98233b482508cbda3b33a66",
+            "body_mmh3"      : "-4111954",
+            "body_sha256"    : "89e06e8374353469c65adb227b158b265641b424fba7ddb2c67eef0c4c1280d3",
+            "body_simhash"   : "9814303593401624250",
+            "header_md5"     : "980366deb2b2fb5df2ad861fc63e79ce",
+            "header_mmh3"    : "-813072798",
+            "header_sha256"  : "39aea75ad548e38b635421861641ad1919ed3b103b17a33c41e7ad46516f736d",
+            "header_simhash" : "10962523587435277678"
+        },
+        "port"           : "443",
+        "url"            : "https://supernets.org", # Remove this and only use the input field as "domain" maybe
+        "input"          : "supernets.org", # rename to domain
+        "title"          : "SuperNETs",
+        "scheme"         : "https",
+        "webserver"      : "nginx",
+        "body_preview"   : "SUPERNETS Home About Contact Donate Docs Network IRC Git Invidious Jitsi LibreX Mastodon Matrix Sup",
+        "content_type"   : "text/html",
+        "method"         : "GET", # Remove this
+        "host"           : "51.89.151.158",
+        "path"           : "/",
+        "favicon"        : "-674048714",
+        "favicon_path"   : "/i/favicon.png",
+        "time"           : "592.907689ms", # Do we need this ?
+        "a"              : ["6.150.220.23"],
+        "tech"           : ["Bootstrap:4.0.0", "HSTS", "Nginx"],
+        "words"          : 436, # Do we need this ?
+        "lines"          : 79, # Do we need this ?
+        "status_code"    : 200, 
+        "content_length" : 4597,
+        "failed"         : false, # Do we need this ?
+        "knowledgebase"  : { # Do we need this ?
+            "PageType" : "nonerror",
+            "pHash"    : 0
+        }
     }
-}
 '''

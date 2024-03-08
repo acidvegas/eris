@@ -113,48 +113,65 @@ async def process_data(file_path: str):
                 yield {'_id': id, '_index': default_index, '_source': struct}
 
 
+async def test(input_path: str):
+    '''
+    Test the Masscan ingestion process
+    
+    :param input_path: Path to the MassDNS log file
+    '''
+    async for document in process_data(input_path):
+        print(document)
+
+
+
+if __name__ == '__main__':
+    import argparse
+    import asyncio
+
+    parser = argparse.ArgumentParser(description='Masscan Ingestor for ERIS')
+    parser.add_argument('input_path', help='Path to the input file or directory')
+    args = parser.parse_args()
+    
+    asyncio.run(test(args.input_path))
+
+
 
 '''
-Example record:
-{
-    "ip"        : "43.134.51.142",
-    "timestamp" : "1705255468", # Convert to ZULU BABY
-    "ports"     : [ # We will create a record for each port opened
-        {
+Deploy:
+    apt-get install iptables masscan libpcap-dev screen
+    setcap 'CAP_NET_RAW+eip CAP_NET_ADMIN+eip' /bin/masscan
+    /sbin/iptables -A INPUT -p tcp --dport 61010 -j DROP # Not persistent
+    printf "0.0.0.0/8\n10.0.0.0/8\n100.64.0.0/10\n127.0.0.0/8\n169.254.0.0/16\n172.16.0.0/12\n192.0.0.0/24\n192.0.2.0/24\n192.31.196.0/24\n192.52.193.0/24\n192.88.99.0/24\n192.168.0.0/16\n192.175.48.0/24\n198.18.0.0/15\n198.51.100.0/24\n203.0.113.0/24\n224.0.0.0/3\n255.255.255.255/32"  > exclude.conf
+    screen -S scan
+    masscan 0.0.0.0/0 -p21,22,23 --banners --http-user-agent "USER_AGENT" --source-port 61010 --open-only --rate 30000 --excludefile exclude.conf -oJ output.json
+    masscan 0.0.0.0/0 -p21,22,23 --banners --http-user-agent "USER_AGENT" --source-port 61000-65503 --open-only --rate 30000 --excludefile exclude.conf -oJ output_new.json --shard $i/$TOTAL
+
+Output:
+    {
+        "ip"        : "43.134.51.142",
+        "timestamp" : "1705255468",
+        "ports"     : [
+            {
+                "port"    : 22, # We will create a record for each port opened
+                "proto"   : "tcp",
+                "service" : {
+                    "name"   : "ssh",
+                    "banner" : "SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.4"
+                }
+            }
+        ]
+    }
+
+Input:
+    {
+        "_id"     : "43.134.51.142:22"
+        "_index"  : "masscan-logs",
+        "_source" : {
+            "ip"      : "43.134.51.142",
             "port"    : 22,
             "proto"   : "tcp",
-            "service" : { # This field is optional
-                "name"   : "ssh",
-                "banner" : "SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.4"
-            }
-        }
-    ]
-}
-
-Will be indexed as:
-{
-    "_id"     : "43.134.51.142:22"
-    "_index"  : "masscan-logs",
-    "_source" : {
-        "ip"      : "43.134.51.142",
-        "port"    : 22,
-        "proto"   : "tcp",
-        "service" : "ssh",
-        "banner"  : "SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.4",
-        "seen"    : "2021-10-08T02:04:28Z"
-}
-'''
-
-
-
-'''
-Notes:
-
-apt-get install iptables masscan libpcap-dev screen
-setcap 'CAP_NET_RAW+eip CAP_NET_ADMIN+eip' /bin/masscan
-/sbin/iptables -A INPUT -p tcp --dport 61010 -j DROP # Not persistent
-printf "0.0.0.0/8\n10.0.0.0/8\n100.64.0.0/10\n127.0.0.0/8\n169.254.0.0/16\n172.16.0.0/12\n192.0.0.0/24\n192.0.2.0/24\n192.31.196.0/24\n192.52.193.0/24\n192.88.99.0/24\n192.168.0.0/16\n192.175.48.0/24\n198.18.0.0/15\n198.51.100.0/24\n203.0.113.0/24\n224.0.0.0/3\n255.255.255.255/32"  > exclude.conf
-screen -S scan
-masscan 0.0.0.0/0 -p21,22,23 --banners --http-user-agent "USER_AGENT" --source-port 61010 --open-only --rate 30000 --excludefile exclude.conf -oJ output.json
-masscan 0.0.0.0/0 -p21,22,23 --banners --http-user-agent "USER_AGENT" --source-port 61000-65503 --open-only --rate 30000 --excludefile exclude.conf -oJ output_new.json --shard $i/$TOTAL
+            "service" : "ssh",
+            "banner"  : "SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.4",
+            "seen"    : "2021-10-08T02:04:28Z"
+    }
 '''
