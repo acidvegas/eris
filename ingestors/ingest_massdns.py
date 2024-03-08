@@ -2,6 +2,35 @@
 # Elasticsearch Recon Ingestion Scripts (ERIS) - Developed by Acidvegas (https://git.acid.vegas/eris)
 # ingest_massdns.py
 
+'''
+Deployment:
+    git clone https://github.com/blechschmidt/massdns.git $HOME/massdns && cd $HOME/massdns && make
+    curl -s https://public-dns.info/nameservers.txt | grep -v ':' > $HOME/massdns/nameservers.txt
+    pythons ./scripts/ptr.py | ./bin/massdns -r $HOME/massdns/nameservers.txt -t PTR --filter NOERROR-s 1000 -o S -w $HOME/massdns/fifo.json
+    or...
+    while true; do python ./scripts/ptr.py | ./bin/massdns -r $HOME/massdns/nameservers.txt -t PTR --filter NOERROR -s 1000 -o S -w $HOME/massdns/fifo.json; done
+
+Output:
+    0.6.229.47.in-addr.arpa. PTR 047-229-006-000.res.spectrum.com.
+    0.6.228.75.in-addr.arpa. PTR 0.sub-75-228-6.myvzw.com.
+    0.6.207.73.in-addr.arpa. PTR c-73-207-6-0.hsd1.ga.comcast.net.
+
+Input:
+    {
+        "_id"     : "47.229.6.0"
+        "_index"  : "ptr-records",
+        "_source" : {
+            "ip"     : "47.229.6.0",
+            "record" : "047-229-006-000.res.spectrum.com", # This will be a list if there are more than one PTR record
+            "seen"   : "2021-06-30T18:31:00Z"
+        }
+    }
+
+Notes:
+- Why do some IP addresses return a CNAME from a PTR request
+- What is dns-servfail.net (Frequent CNAME response from PTR requests)
+'''
+
 import logging
 import time
 
@@ -11,7 +40,7 @@ except ImportError:
     raise ImportError('Missing required \'aiofiles\' library. (pip install aiofiles)')
 
 
-default_index = 'ptr-records-eris'
+default_index = 'eris-massdns'
 
 
 def construct_map() -> dict:
@@ -113,31 +142,23 @@ async def process_data(file_path: str):
             }
 
 
+async def test(input_path: str):
+    '''
+    Test the MassDNS ingestion process
+    
+    :param input_path: Path to the MassDNS log file
+    '''
+    async for document in process_data(input_path):
+        print(document)
 
-'''
-Deployment:
-    git clone https://github.com/blechschmidt/massdns.git $HOME/massdns && cd $HOME/massdns && make
-    curl -s https://public-dns.info/nameservers.txt | grep -v ':' > $HOME/massdns/nameservers.txt
-    pythons ./scripts/ptr.py | ./bin/massdns -r $HOME/massdns/nameservers.txt -t PTR --filter NOERROR -o S -w $HOME/massdns/fifo.json
 
-Output:
-    0.6.229.47.in-addr.arpa. PTR 047-229-006-000.res.spectrum.com.
-    0.6.228.75.in-addr.arpa. PTR 0.sub-75-228-6.myvzw.com.
-    0.6.207.73.in-addr.arpa. PTR c-73-207-6-0.hsd1.ga.comcast.net.
 
-Input:
-    {
-        "_id"     : "47.229.6.0"
-        "_index"  : "ptr-records",
-        "_source" : {
-            "ip"     : "47.229.6.0",
-            "record" : "047-229-006-000.res.spectrum.com", # This will be a list if there are more than one PTR record
-            "seen"   : "2021-06-30T18:31:00Z"
-        }
-    }
+if __name__ == '__main__':
+    import argparse
+    import asyncio
 
-Notes:
-- Why do some IP addresses return a CNAME from a PTR request
-- What is dns-servfail.net (Frequent CNAME response from PTR requests)
-- Do we need JSON output from massdns?
-'''
+    parser = argparse.ArgumentParser(description='MassDNS Ingestor for ERIS')
+    parser.add_argument('input_path', help='Path to the input file or directory')
+    args = parser.parse_args()
+    
+    asyncio.run(test(args.input_path))
