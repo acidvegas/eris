@@ -77,7 +77,7 @@ async def process_data(file_path: str):
 
             # Sentinel value to indicate the end of a process (for closing out a FIFO stream)
             if line == '~eof':
-                yield last
+                return last
 
             # Skip empty lines
             if not line:
