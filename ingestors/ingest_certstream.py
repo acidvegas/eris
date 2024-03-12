@@ -68,7 +68,7 @@ async def process_data(place_holder: str = None):
 							'seen'   : time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
 						}
 
-						yield {'_id': id, '_index': default_index, '_source': struct}
+						yield {'_index': default_index, '_source': struct}
 
 		except websockets.ConnectionClosed:
 			logging.error('Connection to Certstream was closed. Attempting to reconnect...')

@@ -24,14 +24,14 @@ python eris.py [options] <input>
 | `--watch`    | Create or watch a FIFO for real-time indexing |
 
 ###### Elasticsearch arguments
-| Argument        | Description                                             | Default             |
-|-----------------|---------------------------------------------------------|---------------------|
-| `--host`        | Elasticsearch host                                      | `http://localhost/` |
-| `--port`        | Elasticsearch port                                      | `9200`              |
-| `--user`        | Elasticsearch username                                  | `elastic`           |
-| `--password`    | Elasticsearch password                                  | `$ES_PASSWORD`      |
-| `--api-key`     | Elasticsearch API Key for authentication                | `$ES_APIKEY`        |
-| `--self-signed` | Elasticsearch connection with a self-signed certificate |                     |
+| Argument        | Description                                             | Default            |
+|-----------------|---------------------------------------------------------|--------------------|
+| `--host`        | Elasticsearch host                                      | `http://localhost` |
+| `--port`        | Elasticsearch port                                      | `9200`             |
+| `--user`        | Elasticsearch username                                  | `elastic`          |
+| `--password`    | Elasticsearch password                                  | `$ES_PASSWORD`     |
+| `--api-key`     | Elasticsearch API Key for authentication                | `$ES_APIKEY`       |
+| `--self-signed` | Elasticsearch connection with a self-signed certificate |                    |
 
 ###### Elasticsearch indexing arguments
 | Argument     | Description                          | Default             |
@@ -50,20 +50,23 @@ python eris.py [options] <input>
 | `--timeout`    | Number of seconds to wait before retrying a chunk        | `60`    |
 
 ###### Ingestion arguments
-| Argument    | Description              |
-|-------------|--------------------------|
-| `--certs`   | Index Certstream records |
-| `--httpx`   | Index HTTPX records      |
-| `--masscan` | Index Masscan records    |
-| `--massdns` | Index massdns records    |
-| `--zone`    | Index zone DNS records   |
+| Argument      | Description              |
+|---------------|--------------------------|
+| `--certstrem` | Index Certstream records |
+| `--httpx`     | Index HTTPX records      |
+| `--masscan`   | Index Masscan records    |
+| `--massdns`   | Index massdns records    |
+| `--zone`      | Index zone DNS records   |
 
-This ingestion suite will use the built in node sniffer, so by connecting to a single node, you can load balance across the entire cluster.
-It is good to know how much nodes you have in the cluster to determine how to fine tune the arguments for the best performance, based on your environment.
+~~This ingestion suite will use the built in node sniffer, so by connecting to a single node, you can load balance across the entire cluster.~~
+
+**Note:** The sniffer has been disabled for now due an [issue](https://github.com/elastic/elasticsearch-py/issues/2005#issuecomment-1645641960) with the 8.x elasticsearch client. The auth headers are not properly sent when enabling the sniffer. A working [patch](https://github.com/elastic/elasticsearch-py/issues/2005#issuecomment-1645641960) was shared and has been *mostly* converted in [helpers/sniff_patch.py](./helpers/sniff_patch.py) for the async client.
 
 ## Roadmap
 - Create a module for RIR database ingestion *(WHOIS, delegations, transfer, ASN mapping, peering, etc)*
 - Dynamically update the batch metrics when the sniffer adds or removes nodes.
+- Fix issue with leftover FIFO files *(catch SIGTERM / SIGINT signals)*
+- Create a working patch for the async client to properly send auth headers.
 
 ___
 

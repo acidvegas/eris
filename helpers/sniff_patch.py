@@ -23,12 +23,12 @@ async def init_elasticsearch(*args, **kwargs):
     :param args: Async Elasticsearch positional arguments.
     :param kwargs: Async Elasticsearch keyword arguments.
     '''
-    async_client.default_sniff_callback = _override_sniff_callback(kwargs['basic_auth'])
+    async_client.default_sniff_callback = await _override_sniff_callback(kwargs['basic_auth'])
 
     return async_client.AsyncElasticsearch(*args, **kwargs)
 
 
-def _override_sniff_callback(basic_auth):
+async def _override_sniff_callback(basic_auth):
     '''
     Taken from https://github.com/elastic/elasticsearch-py/blob/8.8/elasticsearch/_sync/client/_base.py#L166
     Completely unmodified except for adding the auth header to the elastic request.
