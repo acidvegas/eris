@@ -14,7 +14,7 @@ except ImportError:
 
 
 # Set a default elasticsearch index if one is not provided
-default_index = 'cert-stream'
+default_index = 'eris-certstream'
 
 
 def construct_map() -> dict:
