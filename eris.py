@@ -35,7 +35,7 @@ class ElasticIndexer:
 		# Sniffing disabled due to an issue with the elasticsearch 8.x client (https://github.com/elastic/elasticsearch-py/issues/2005)
 		es_config = {
 			#'hosts'           : [f'{args.host}:{args.port}'],
-			'hosts'            : [f'{args.host}:{port}' for port in ('9200', '9201', '9202')], # Temporary alternative to sniffing
+			'hosts'            : [f'{args.host}:{port}' for port in ('9002', '9003', '9004')], # Temporary alternative to sniffing
 			'verify_certs'     : args.self_signed,
 			'ssl_show_warn'    : args.self_signed,
 			'request_timeout'  : args.timeout,
@@ -93,6 +93,8 @@ class ElasticIndexer:
 
 	async def get_cluster_health(self) -> dict:
 		'''Get the health of the Elasticsearch cluster.'''
+		
+
 
 		return await self.es.cluster.health()
 
@@ -139,19 +141,20 @@ class ElasticIndexer:
 			raise Exception(f'Failed to index records to {self.es_index} from {file_path} ({e})')
 
 
-def setup_logger(name: str, level: int = logging.INFO, to_file: bool = False, max_bytes: int = 250000, backups: int = 7) -> logging.Logger:
+def setup_logger(level: int = logging.INFO, to_file: bool = False, max_bytes: int = 250000, backups: int = 7) -> logging.Logger:
 	'''
 	Setup a custom logger with options for console and file logging.
 
-	:param name: Name of the logger.
 	:param level: Logging level.
 	:param to_file: Whether to log to a file.
 	:param max_bytes: Maximum size in bytes before rotating log file.
 	:param backups: Number of backup files to keep.
 	'''
 
-	logger = logging.getLogger(name)
+	logger = logging.getLogger()
 	logger.setLevel(level)
+
+	logger.handlers.clear()
 
 	formatter_console = logging.Formatter('%(asctime)s | %(levelname)9s | %(message)s', '%I:%M:%S')
 	formatter_file    = logging.Formatter('%(asctime)s | %(levelname)9s | %(filename)s.%(funcName)s | %(message)s', '%Y-%m-%d %I:%M:%S')
@@ -165,8 +168,6 @@ def setup_logger(name: str, level: int = logging.INFO, to_file: bool = False, ma
 		fh = logging.handlers.RotatingFileHandler('logs/debug.log', maxBytes=max_bytes, backupCount=backups, encoding='utf-8')
 		fh.setFormatter(formatter_file)
 		logger.addHandler(fh)
-
-	return logger
 
 
 async def main():
@@ -233,7 +234,7 @@ async def main():
 	else:
 		raise ValueError('No ingestor specified')
 
-	health = await edx.get_cluster_health()
+	health = await edx.es.cluster.health()
 	logging.info(health)
 
 	await asyncio.sleep(5) # Delay to allow time for sniffing to complete
@@ -267,7 +268,7 @@ async def main():
 
 
 if __name__ == '__main__':
-	setup_logger('eris', level=logging.INFO, to_file=True)
+	setup_logger(to_file=True)
 	print('')
 	print('┏┓┳┓┳┏┓   Elasticsearch Recon Ingestion Scripts')
 	print('┣ ┣┫┃┗┓        Developed by Acidvegas in Python')
