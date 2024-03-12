@@ -138,7 +138,7 @@ class ElasticIndexer:
 			raise Exception(f'Failed to index records to {self.es_index} from {file_path} ({e})')
 
 
-def setup_logger(name: str, level: logging._Level = logging.INFO, to_file: bool = False, max_bytes: int = 250000, backups: int = 7) -> logging.Logger:
+def setup_logger(name: str, level: int = logging.INFO, to_file: bool = False, max_bytes: int = 250000, backups: int = 7) -> logging.Logger:
 	'''
 	Setup a custom logger with options for console and file logging.
 
