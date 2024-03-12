@@ -72,7 +72,7 @@ async def process_data(place_holder: str = None):
 
 		except websockets.ConnectionClosed:
 			logging.error('Connection to Certstream was closed. Attempting to reconnect...')
-			await asyncio.sleep(15)
+			await asyncio.sleep(3)
 
 		except Exception as e:
 			logging.error(f'An error occurred while processing Certstream records! ({e})')
