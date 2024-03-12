@@ -43,40 +43,33 @@ async def process_data(place_holder: str = None):
 	:param place_holder: Placeholder parameter to match the process_data function signature of other ingestors.
 	'''
 
-	while True:
+	async for websocket in websockets.connect('wss://certstream.calidog.io', ping_interval=15, ping_timeout=60):
 		try:
-			async with websockets.connect('wss://certstream.calidog.io') as websocket:
-				while True:
-					# Read a line from the websocket
-					line = await websocket.recv()
+			async for line in websocket:
+			
+				# Parse the JSON record
+				try:
+					record = json.loads(line)
+				except json.decoder.JSONDecodeError:
+					logging.error(f'Invalid line from the websocket: {line}')
+					continue
 
-					# Parse the JSON record
-					try:
-						record = json.loads(line)
-					except json.decoder.JSONDecodeError:
-						logging.error(f'Invalid line from the websocket: {line}')
-						continue
+				# Grab the unique domains from the record (excluding wildcards)
+				domains = record['data']['leaf_cert']['all_domains']
+				domains = set([domain[2:] if domain.startswith('*.') else domain for domain in domains])
 
-					# Grab the unique domains from the record (excluding wildcards)
-					domains = record['data']['leaf_cert']['all_domains']
-					domains = set([domain[2:] if domain.startswith('*.') else domain for domain in domains])
+				# Construct the document
+				for domain in domains:
+					struct = {
+						'domain' : domain,
+						'seen'   : time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+					}
 
-					# Construct the document
-					for domain in domains:
-						struct = {
-							'domain' : domain,
-							'seen'   : time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
-						}
+					yield {'_index': default_index, '_source': struct}
 
-						yield {'_index': default_index, '_source': struct}
-
-		except websockets.ConnectionClosed:
-			logging.error('Connection to Certstream was closed. Attempting to reconnect...')
+		except websockets.ConnectionClosed as e	:
+			logging.error(f'Connection to Certstream was closed. Attempting to reconnect... ({e})')
 			await asyncio.sleep(3)
-
-		except Exception as e:
-			logging.error(f'An error occurred while processing Certstream records! ({e})')
-			break
 
 
 async def test():

@@ -3,6 +3,7 @@
 # ingest_rir_delegations.py
 
 import csv
+import ipaddress
 import logging
 import time
 
@@ -21,7 +22,7 @@ delegation_db = {
 	'apnic'   : 'https://ftp.apnic.net/stats/apnic/delegated-apnic-extended-latest',
 	'arin'    : 'https://ftp.arin.net/pub/stats/arin/delegated-arin-extended-latest',
 	'lacnic'  : 'https://ftp.lacnic.net/pub/stats/lacnic/delegated-lacnic-extended-latest',
-	'ripe'    : 'https://ftp.ripe.net/pub/stats/ripencc/delegated-ripencc-extended-latest'
+	'ripencc' : 'https://ftp.ripe.net/pub/stats/ripencc/delegated-ripencc-extended-latest'
 }
 
 
@@ -36,7 +37,7 @@ def construct_map() -> dict:
 		'mappings': {
 			'properties': {
 				'registry'   : { 'type': 'keyword' },
-				'cc'         : { 'type': 'keyword' },
+				'cc'         : { 'type': 'keyword' }, # ISO 3166 2-letter code
 				'type'       : { 'type': 'keyword' },
 				'start'      : {
 					'properties': {
@@ -106,21 +107,44 @@ async def process_data():
 
 							record = {
 								'registry' : row[0],
+								'cc'       : row[1],
 								'type'     : row[2],
-								'start'    : { record_type: row[3] },
+								'start'    : row[3],
 								'value'    : row[4],
+								'date'     : row[5],
 								'status'   : row[6]
 							}
+       
 							if len(row) == 7:
 								if row[7]:
 									record['extensions'] = row[7]
 
-							if (cc := row[1]):
-								record['cc'] = cc.lower()
+							if not record['cc']:
+								del record['cc']
+							elif len(record['cc']) != 2:
+								raise ValueError(f'Invalid country code: {record["cc"]} ({cache})')
 
-							if (date_field := row[5]):
-								if date_field != '00000000':
-									record['date'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.strptime(date_field, '%Y%m%d')),
+							if record['type'] == 'asn':
+								record['start'] = { record_type : int(record['start']) }
+							elif record['type'] in ('ipv4', 'ipv6'):
+								try:
+									ipaddress.ip_address(record['start'])
+									record['start'] = { record_type : record['start'] }
+								except ValueError:
+									raise ValueError(f'Invalid start IP: {record["start"]} ({cache})')
+							else:
+								raise ValueError(f'Invalid record type: {record["type"]}')
+    
+							if not record['value'].isdigit():
+								raise ValueError(f'Invalid value: {record["value"]} ({cache})')
+    
+							if not record['date'] or record['date'] == '00000000':
+								del record['date']
+							else:
+								record['date'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.strptime(record['date'], '%Y%m%d')),
+         
+							if record['status'] not in ('allocated', 'assigned', 'available', 'reserved', 'unallocated', 'unknown'):
+								raise ValueError(f'Invalid status: {record["status"]} ({cache})')
 
 							#json_output['records'].append(record)
 
