@@ -10,11 +10,11 @@ import time
 try:
 	import aiohttp
 except ImportError:
-	raise ImportError('Missing required \'aiofiles\' library. (pip install aiofiles)')
+	raise ImportError('Missing required \'aiohttp\' library. (pip install aiohttp)')
 
 
 # Set a default elasticsearch index if one is not provided
-default_index = 'rir-delegations-' + time.strftime('%Y-%m-%d')
+default_index = 'rir-delegation-' + time.strftime('%Y-%m-%d')
 
 # Delegation data sources
 delegation_db = {
