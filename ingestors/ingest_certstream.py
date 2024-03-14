@@ -54,10 +54,20 @@ async def process_data(place_holder: str = None):
 					logging.error(f'Invalid line from the websocket: {line}')
 					continue
 
-				# Grab the unique domains from the record (excluding wildcards)
-				domains = record['data']['leaf_cert']['all_domains']
-				domains = set([domain[2:] if domain.startswith('*.') else domain for domain in domains])
+				# Grab the unique domains from the records
+				all_domains = record['data']['leaf_cert']['all_domains']
+				domains     =  list()
 
+				# We only care about subdomains (excluding www. and wildcards)
+				for domain in all_domains:
+					if domain.startswith('*.'):
+						domain = domain[2:]
+					elif domain.startswith('www.') and domain.count('.') == 2:
+						continue
+					if domain.count('.') > 1:
+						if domain not in domains:
+							domains.append(domain)
+			
 				# Construct the document
 				for domain in domains:
 					struct = {
