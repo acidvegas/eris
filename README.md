@@ -6,7 +6,7 @@ The is a suite of tools to aid in the ingestion of recon data from various sourc
 ## Prerequisites
 - [python](https://www.python.org/)
     - [elasticsearch](https://pypi.org/project/elasticsearch/) *(`pip install elasticsearch`)*
-    - [ecs_logging](https://pypi.org/project/ecs-logging) *(`pip install ecs-logging`)*
+    - [ecs-logging](https://pypi.org/project/ecs-logging) *(`pip install ecs-logging`)*
     - [aiofiles](https://pypi.org/project/aiofiles) *(`pip install aiofiles`)*
     - [aiohttp](https://pypi.org/projects/aiohttp) *(`pip install aiohttp`)*
     - [websockets](https://pypi.org/project/websockets/) *(`pip install websockets`) (only required for `--certs` ingestion)*
