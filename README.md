@@ -6,6 +6,7 @@ The is a suite of tools to aid in the ingestion of recon data from various sourc
 ## Prerequisites
 - [python](https://www.python.org/)
     - [elasticsearch](https://pypi.org/project/elasticsearch/) *(`pip install elasticsearch`)*
+    - [ecs_logging](https://pypi.org/project/ecs-logging) *(`pip install ecs-logging`)*
     - [aiofiles](https://pypi.org/project/aiofiles) *(`pip install aiofiles`)*
     - [aiohttp](https://pypi.org/projects/aiohttp) *(`pip install aiohttp`)*
     - [websockets](https://pypi.org/project/websockets/) *(`pip install websockets`) (only required for `--certs` ingestion)*
@@ -18,10 +19,13 @@ python eris.py [options] <input>
 
 ### Options
 ###### General arguments
-| Argument     | Description                                   |
-|--------------|-----------------------------------------------|
-| `input_path` | Path to the input file or directory           |
-| `--watch`    | Create or watch a FIFO for real-time indexing |
+| Argument     | Description                                                      |
+|--------------|------------------------------------------------------------------|
+| `input_path` | Path to the input file or directory                              |
+| `--watch`    | Create or watch a FIFO for real-time indexing                    |
+| `--log`      | Logging level for file *(debug, info, warning, error, critical)* |
+
+**Note:** File logging is disabled by default. When enabled, it will log using the [Elastic Common Schema](https://www.elastic.co/guide/en/ecs-logging/python/current/intro.html) *(ECS)*.
 
 ###### Elasticsearch arguments
 | Argument        | Description                                             | Default            |
