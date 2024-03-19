@@ -23,7 +23,7 @@ transfers_db = {
 	'lacnic'  : 'https://ftp.lacnic.net/pub/stats/lacnic/transfers/transfers_latest.json',
 	'ripencc' : 'https://ftp.ripe.net/pub/stats/ripencc/transfers/transfers_latest.json'
 }
-    
+
 
 def construct_map() -> dict:
 	'''Construct the Elasticsearch index mapping for records'''
@@ -77,19 +77,19 @@ async def process_data():
 				async with session.get(url) as response:
 					if response.status != 200:
 						raise Exception(f'Failed to fetch {registry} delegation data: {response.status}')
-  
+
 					data = await response.text()
 
 					try:
 						json_data = json.loads(data)
-					except aiohttp.ContentTypeError as e:
+					except json.JSONDecodeError as e:
 						raise Exception(f'Failed to parse {registry} delegation data: {e}')
-  
+
 					if 'transfers' not in json_data:
 						raise Exception(f'Invalid {registry} delegation data: {json_data}')
-      
+
 					for record in json_data['transfers']:
-         
+
 						if 'asns' in record:
 							for set_type in ('original_set', 'transfer_set'):
 								if set_type in record['asns']:
@@ -103,7 +103,7 @@ async def process_data():
 												else:
 													record['asns'][set_type][count][option] = int(asn)
 										count += 1
-													
+
 
 						if 'ip4nets' in record or 'ip6nets' in record:
 							for ip_type in ('ip4nets', 'ip6nets'):
@@ -124,10 +124,10 @@ async def process_data():
 														except ValueError as e:
 															raise Exception(f'Invalid {set_type} {option} IP in {registry} data: {e}')
 												count += 1
-        
+
 						if record['type'] not in ('MERGER_ACQUISITION', 'RESOURCE_TRANSFER'):
 							raise Exception(f'Invalid transfer type in {registry} data: {record["type"]}')
-        
+
 						yield {'_index': default_index, '_source': record}
 
 		except Exception as e:
@@ -152,36 +152,36 @@ if __name__ == '__main__':
 '''
 Output:
 	{
-    	"transfer_date" : "2017-09-15T19:00:00Z",
-     	"ip4nets"       : {
-        	"original_set" : [ { "start_address": "94.31.64.0", "end_address": "94.31.127.255" } ],
-         	"transfer_set" : [ { "start_address": "94.31.64.0", "end_address": "94.31.127.255" } ]
-        },
-        "type"                   : "MERGER_ACQUISITION",
-        "source_organization"    : { "name": "Unser Ortsnetz GmbH" },
-        "recipient_organization" : {
-            "name"         : "Deutsche Glasfaser Wholesale GmbH",
-            "country_code" : "DE"
-        },
-        "source_rir"    : "RIPE NCC",
-        "recipient_rir" : "RIPE NCC"
-    },
+		"transfer_date" : "2017-09-15T19:00:00Z",
+	 	"ip4nets"       : {
+			"original_set" : [ { "start_address": "94.31.64.0", "end_address": "94.31.127.255" } ],
+		 	"transfer_set" : [ { "start_address": "94.31.64.0", "end_address": "94.31.127.255" } ]
+		},
+		"type"                   : "MERGER_ACQUISITION",
+		"source_organization"    : { "name": "Unser Ortsnetz GmbH" },
+		"recipient_organization" : {
+			"name"         : "Deutsche Glasfaser Wholesale GmbH",
+			"country_code" : "DE"
+		},
+		"source_rir"    : "RIPE NCC",
+		"recipient_rir" : "RIPE NCC"
+	},
 	{
-    	"transfer_date" : "2017-09-18T19:00:00Z",
-     	"asns"          : {
-        	"original_set" : [ { "start": 198257, "end": 198257 } ],
-        	"transfer_set" : [ { "start": 198257, "end": 198257 } ]
-        },
-        "type"                   : "MERGER_ACQUISITION",
-        "source_organization"    : { "name": "CERT PLIX Sp. z o.o." },
-        "recipient_organization" : { 
-        	"name"         : "Equinix (Poland) Sp. z o.o.",
+		"transfer_date" : "2017-09-18T19:00:00Z",
+	 	"asns"          : {
+			"original_set" : [ { "start": 198257, "end": 198257 } ],
+			"transfer_set" : [ { "start": 198257, "end": 198257 } ]
+		},
+		"type"                   : "MERGER_ACQUISITION",
+		"source_organization"    : { "name": "CERT PLIX Sp. z o.o." },
+		"recipient_organization" : {
+			"name"         : "Equinix (Poland) Sp. z o.o.",
 			"country_code" : "PL"
-         },
-        "source_rir"    : "RIPE NCC",
-        "recipient_rir" : "RIPE NCC"
-    }
-    
+		 },
+		"source_rir"    : "RIPE NCC",
+		"recipient_rir" : "RIPE NCC"
+	}
+
 Input:
-	- Nothing changed from the output for now...
+	Nothing changed from the output for now...
 '''

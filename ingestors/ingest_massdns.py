@@ -140,17 +140,20 @@ if __name__ == '__main__':
 
 '''
 Deployment:
-	sudo apt-get install build-essential gcc make
+	sudo apt-get install build-essential gcc make python3 python3-pip
+	pip install aiofiles aiohttp elasticsearch
+	git clone --depth 1 https://github.com/acidvegas/eris.git $HOME/eris
+
 	git clone --depth 1 https://github.com/blechschmidt/massdns.git $HOME/massdns && cd $HOME/massdns && make
 	curl -s https://public-dns.info/nameservers.txt | grep -v ':' > $HOME/massdns/nameservers.txt
-	python3 ./scripts/ptr.py | ./bin/massdns -r $HOME/massdns/nameservers.txt -t PTR --filter NOERROR -o S -w $HOME/massdns/fifo.json
-	or...
-	while true; do python ./scripts/ptr.py | ./bin/massdns -r $HOME/massdns/nameservers.txt -t PTR --filter NOERROR -o S -w $HOME/massdns/fifo.json; done
+	while true; do python3 ./scripts/ptr.py | ./bin/massdns -r $HOME/massdns/nameservers.txt -t PTR --filter NOERROR -o S -w $HOME/eris/FIFO; done
+
 
 Output:
 	0.6.229.47.in-addr.arpa. PTR 047-229-006-000.res.spectrum.com.
 	0.6.228.75.in-addr.arpa. PTR 0.sub-75-228-6.myvzw.com.
 	0.6.207.73.in-addr.arpa. PTR c-73-207-6-0.hsd1.ga.comcast.net.
+
 
 Input:
 	{
@@ -162,6 +165,7 @@ Input:
 			'seen'   : '2021-06-30T18:31:00Z'
 		}
 	}
+
 
 Notes:
 	Why do some IP addresses return a A/CNAME from a PTR request

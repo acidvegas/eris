@@ -45,8 +45,9 @@ async def process_data(place_holder: str = None):
 
 	async for websocket in websockets.connect('wss://certstream.calidog.io', ping_interval=15, ping_timeout=60):
 		try:
+			# Read the websocket stream
 			async for line in websocket:
-			
+
 				# Parse the JSON record
 				try:
 					record = json.loads(line)
@@ -65,9 +66,10 @@ async def process_data(place_holder: str = None):
 					elif domain.startswith('www.') and domain.count('.') == 2:
 						continue
 					if domain.count('.') > 1:
+						# TODO: Add a check for PSL TLDs...domain.co.uk, domain.com.au, etc. (we want to ignore these if they are not subdomains)
 						if domain not in domains:
 							domains.append(domain)
-			
+
 				# Construct the document
 				for domain in domains:
 					struct = {
@@ -81,6 +83,10 @@ async def process_data(place_holder: str = None):
 			logging.error(f'Connection to Certstream was closed. Attempting to reconnect... ({e})')
 			await asyncio.sleep(3)
 
+		except Exception as e:
+			logging.error(f'Error processing Certstream data: {e}')
+			await asyncio.sleep(3)
+
 
 async def test():
 	'''Test the ingestion process.'''
@@ -91,8 +97,6 @@ async def test():
 
 
 if __name__ == '__main__':
-	import asyncio
-
 	asyncio.run(test())
 
 
@@ -155,4 +159,7 @@ Output:
 		},
 		"message_type": "certificate_update"
 	}
+
+Notes:
+	- Fix the "no close frame received or sent" error
 '''

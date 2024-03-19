@@ -191,13 +191,12 @@ Input:
 		'registry'   : 'arin',
 		'cc'         : 'us',
 		'type'       : 'ipv4',
-		'start'      : { 'ip': '76.15.132.0' },
-		'value'      : 1024,
+		'ip'         : { 'start': '76.15.132.0', 'end': '76.16.146.0' },
 		'date'       : '2007-05-02T00:00:00Z',
 		'status'     : 'allocated',
 		'extensions' : '6c065d5b54b877781f05e7d30ebfff28'
 	}
- 
- Notes:
+
+Notes:
 	Do we make this handle the database locally or load it into ram?
 '''

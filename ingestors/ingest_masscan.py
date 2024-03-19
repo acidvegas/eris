@@ -7,171 +7,177 @@ import logging
 import time
 
 try:
-    import aiofiles
+	import aiofiles
 except ImportError:
-    raise ImportError('Missing required \'aiofiles\' library. (pip install aiofiles)')
+	raise ImportError('Missing required \'aiofiles\' library. (pip install aiofiles)')
 
 
+# Set a default elasticsearch index if one is not provided
 default_index = 'masscan-logs'
 
 
 def construct_map() -> dict:
-    '''Construct the Elasticsearch index mapping for Masscan records.'''
+	'''Construct the Elasticsearch index mapping for Masscan records.'''
 
-    keyword_mapping = { 'type': 'text',  'fields': { 'keyword': { 'type': 'keyword', 'ignore_above': 256 } } }
+	# Match on exact value or full text search
+	keyword_mapping = { 'type': 'text',  'fields': { 'keyword': { 'type': 'keyword', 'ignore_above': 256 } } }
 
-    geoip_mapping = {
-        'city_name'        : keyword_mapping,
-        'continent_name'   : keyword_mapping,
-        'country_iso_code' : keyword_mapping,
-        'country_name'     : keyword_mapping,
-        'location'         : { 'type': 'geo_point' },
-        'region_iso_code'  : keyword_mapping,
-        'region_name'      : keyword_mapping,
-    }
+	# Construct the geoip mapping (Used with the geoip pipeline to enrich the data)
+	geoip_mapping = {
+		'city_name'        : keyword_mapping,
+		'continent_name'   : keyword_mapping,
+		'country_iso_code' : keyword_mapping,
+		'country_name'     : keyword_mapping,
+		'location'         : { 'type': 'geo_point' },
+		'region_iso_code'  : keyword_mapping,
+		'region_name'      : keyword_mapping,
+	}
 
-    mapping = {
-        'mappings': {
-            'properties': {
-                'ip'      : { 'type': 'ip' },
-                'port'    : { 'type': 'integer' },
-                'data'    : {
-                    'properties': {
-                        'proto'   : { 'type': 'keyword' },
-                        'service' : { 'type': 'keyword' },
-                        'banner'  : keyword_mapping,
-                        'seen'    : { 'type': 'date' }
-                    }
-                },
-                #'geoip'    : { 'properties': geoip_mapping } # Used with the geoip pipeline to enrich the data
-                'last_seen' : { 'type': 'date' }                
-            }
-        }
-    }
+	# Construct the index mapping
+	mapping = {
+		'mappings': {
+			'properties': {
+				'ip'      : { 'type': 'ip' },
+				'port'    : { 'type': 'integer' },
+				'proto'   : { 'type': 'keyword' },
+				'service' : { 'type': 'keyword' },
+				'banner'  : keyword_mapping,
+				'seen'    : { 'type': 'date' }
+				#'geoip'	: { 'properties': geoip_mapping }
+			}
+		}
+	}
 
-    return mapping
+	return mapping
 
 
-async def process_data(file_path: str):
-    '''
-    Read and process Masscan records from the log file.
+async def process_data(input_path: str):
+	'''
+	Read and process the input file
 
-    :param file_path: Path to the Masscan log file
-    '''
+	:param input_path: Path to the input file
+	'''
 
-    async with aiofiles.open(file_path) as input_file:
-        async for line in input_file:
-            line = line.strip()
+	async with aiofiles.open(input_path) as input_file:
+		# Read the input file line by line
+		async for line in input_file:
+			line = line.strip()
 
-            if line == '~eof': # Sentinel value to indicate the end of a process (Used with --watch with FIFO)
-                break
+			# Sentinel value to indicate the end of a process (for closing out a FIFO stream)
+			if line == '~eof':
+				break
 
-            if not line or not line.startswith('{'):
-                continue
+			# Skip empty lines and lines that do not start with a JSON object
+			if not line or not line.startswith('{'):
+				continue
 
-            if line.endswith(','): # Do we need this? Masscan JSON output seems with seperate records with a comma between lines for some reason...
-                line = line[:-1]
+			# Do we need this? Masscan JSON output seems with seperate records with a comma between lines for some reason...
+			if line.endswith(','):
+				line = line[:-1]
 
-            try:
-                record = json.loads(line)
-            except json.decoder.JSONDecodeError:
-                # In rare cases, the JSON record may be incomplete or malformed:
-                #   { "ip": "51.161.12.223", "timestamp": "1707628302", "ports": [ {"port": 22, "proto": "tcp", "service": {"name": "ssh", "banner":
-                #   { "ip": "83.66.211.246", "timestamp": "1706557002"
-                logging.error(f'Failed to parse JSON record! ({line})')
-                input('Press Enter to continue...') # Pause for review & debugging (remove this in production)
-                continue
+			# Parse the JSON record
+			try:
+				record = json.loads(line)
+			except json.decoder.JSONDecodeError:
+				# In rare cases, the JSON record may be incomplete or malformed:
+				#   { "ip": "51.161.12.223", "timestamp": "1707628302", "ports": [ {"port": 22, "proto": "tcp", "service": {"name": "ssh", "banner":
+				#   { "ip": "83.66.211.246", "timestamp": "1706557002"
+				logging.error(f'Failed to parse JSON record! ({line})')
+				input('Press Enter to continue...') # Pause for review & debugging (remove this in production)
+				continue
 
-            if len(record['ports']) > 1:
-                # In rare cases, a single record may contain multiple ports, though I have yet to witness this...
-                logging.warning(f'Multiple ports found for record! ({record})')
-                input('Press Enter to continue...') # Pause for review (remove this in production)
+			# In rare cases, a single record may contain multiple ports, though I have yet to witness this...
+			if len(record['ports']) > 1:
+				logging.warning(f'Multiple ports found for record! ({record})')
+				input('Press Enter to continue...') # Pause for review (remove this in production)
 
-            for port_info in record['ports']:
-                struct = {
-                    'ip'   : record['ip'],
-                    'data' : {
-                        'port'  : port_info['port'],
-                        'proto' : port_info['proto'],
-                        'seen'  : time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(int(record['timestamp']))),
-                    },
-                    'last_seen' : time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(int(record['timestamp']))),
-                }
+			# Process each port in the record
+			for port_info in record['ports']:
+				struct = {
+					'ip'   : record['ip'],
+					'port'  : port_info['port'],
+					'proto' : port_info['proto'],
+					'seen'  : time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(int(record['timestamp'])))
+				}
 
-                if 'service' in port_info:
-                    if 'name' in port_info['service']:
-                        if (service_name := port_info['service']['name']) not in ('unknown',''):
-                            struct['service'] = service_name
+				# Add the service information if available (this field is optional)
+				if 'service' in port_info:
 
-                    if 'banner' in port_info['service']:
-                        banner = ' '.join(port_info['service']['banner'].split()) # Remove extra whitespace
-                        if banner:
-                            struct['banner'] = banner
+        			# Add the service name if available
+					if 'name' in port_info['service']:
+						if (service_name := port_info['service']['name']) not in ('unknown',''):
+							struct['service'] = service_name
 
-                id = f'{record["ip"]}:{port_info["port"]}' # Store with ip:port as the unique id to allow the record to be reindexed if it exists.
+					# Add the service banner if available
+					if 'banner' in port_info['service']:
+						banner = ' '.join(port_info['service']['banner'].split()) # Remove extra whitespace
+						if banner:
+							struct['banner'] = banner
 
-                yield {'_id': id, '_index': default_index, '_source': struct}
+				# Yield the record
+				yield {'_index': default_index, '_source': struct}
 
 
 async def test(input_path: str):
-    '''
-    Test the Masscan ingestion process
-    
-    :param input_path: Path to the MassDNS log file
-    '''
-    async for document in process_data(input_path):
-        print(document)
+	'''
+	Test the ingestion process
+
+	:param input_path: Path to the input file
+	'''
+
+	async for document in process_data(input_path):
+		print(document)
 
 
 
 if __name__ == '__main__':
-    import argparse
-    import asyncio
+	import argparse
+	import asyncio
 
-    parser = argparse.ArgumentParser(description='Masscan Ingestor for ERIS')
-    parser.add_argument('input_path', help='Path to the input file or directory')
-    args = parser.parse_args()
-    
-    asyncio.run(test(args.input_path))
+	parser = argparse.ArgumentParser(description='Ingestor for ERIS')
+	parser.add_argument('input_path', help='Path to the input file or directory')
+	args = parser.parse_args()
+
+	asyncio.run(test(args.input_path))
 
 
 
 '''
 Deploy:
-    apt-get install iptables masscan libpcap-dev screen
-    setcap 'CAP_NET_RAW+eip CAP_NET_ADMIN+eip' /bin/masscan
-    /sbin/iptables -A INPUT -p tcp --dport 61010 -j DROP # Not persistent
-    printf "0.0.0.0/8\n10.0.0.0/8\n100.64.0.0/10\n127.0.0.0/8\n169.254.0.0/16\n172.16.0.0/12\n192.0.0.0/24\n192.0.2.0/24\n192.31.196.0/24\n192.52.193.0/24\n192.88.99.0/24\n192.168.0.0/16\n192.175.48.0/24\n198.18.0.0/15\n198.51.100.0/24\n203.0.113.0/24\n224.0.0.0/3\n255.255.255.255/32"  > exclude.conf
-    screen -S scan
-    masscan 0.0.0.0/0 -p21,22,23 --banners --http-user-agent "USER_AGENT" --source-port 61010 --open-only --rate 30000 --excludefile exclude.conf -oJ output.json
-    masscan 0.0.0.0/0 -p21,22,23 --banners --http-user-agent "USER_AGENT" --source-port 61000-65503 --open-only --rate 30000 --excludefile exclude.conf -oJ output_new.json --shard $i/$TOTAL
+	apt-get install iptables masscan libpcap-dev screen
+	setcap 'CAP_NET_RAW+eip CAP_NET_ADMIN+eip' /bin/masscan
+	/sbin/iptables -A INPUT -p tcp --dport 61010 -j DROP # Not persistent
+	printf "0.0.0.0/8\n10.0.0.0/8\n100.64.0.0/10\n127.0.0.0/8\n169.254.0.0/16\n172.16.0.0/12\n192.0.0.0/24\n192.0.2.0/24\n192.31.196.0/24\n192.52.193.0/24\n192.88.99.0/24\n192.168.0.0/16\n192.175.48.0/24\n198.18.0.0/15\n198.51.100.0/24\n203.0.113.0/24\n224.0.0.0/3\n255.255.255.255/32"  > exclude.conf
+	screen -S scan
+	masscan 0.0.0.0/0 -p18000 --banners --http-user-agent "USER_AGENT" --source-port 61010 --open-only --rate 30000 --excludefile exclude.conf -oJ 18000.json
+	masscan 0.0.0.0/0 -p21,22,23 --banners --http-user-agent "USER_AGENT" --source-port 61000-65503 --open-only --rate 30000 --excludefile exclude.conf -oJ output_new.json --shard $i/$TOTAL
 
 Output:
-    {
-        "ip"        : "43.134.51.142",
-        "timestamp" : "1705255468",
-        "ports"     : [
-            {
-                "port"    : 22, # We will create a record for each port opened
-                "proto"   : "tcp",
-                "service" : {
-                    "name"   : "ssh",
-                    "banner" : "SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.4"
-                }
-            }
-        ]
-    }
+	{
+		"ip"        : "43.134.51.142",
+		"timestamp" : "1705255468",
+		"ports"     : [
+			{
+				"port"    : 22, # We will create a record for each port opened
+				"proto"   : "tcp",
+				"service" : {
+					"name"   : "ssh",
+					"banner" : "SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.4"
+				}
+			}
+		]
+	}
 
 Input:
-    {
-        "_id"     : "43.134.51.142:22"
-        "_index"  : "masscan-logs",
-        "_source" : {
-            "ip"      : "43.134.51.142",
-            "port"    : 22,
-            "proto"   : "tcp",
-            "service" : "ssh",
-            "banner"  : "SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.4",
-            "seen"    : "2021-10-08T02:04:28Z"
-    }
+	{
+		"_id"     : "43.134.51.142:22"
+		"_index"  : "masscan-logs",
+		"_source" : {
+			"ip"      : "43.134.51.142",
+			"port"    : 22,
+			"proto"   : "tcp",
+			"service" : "ssh",
+			"banner"  : "SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.4",
+			"seen"    : "2021-10-08T02:04:28Z"
+	}
 '''
