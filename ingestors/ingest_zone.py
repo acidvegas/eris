@@ -85,7 +85,7 @@ async def process_data(file_path: str):
 
 			# Skip comments but detect AXFR transfers to change the source)
 			if line.startswith(';'):
-				if 'DiG' in line and 'AXFR' in line:
+				if 'DiG' in line and 'AXFR' in line: # Do we need to worry about case sensitivity? How can we store the nameserver aswell?
 					source = 'axfr'
 				continue
 				
@@ -201,4 +201,5 @@ Input:
 
 Notes:
 	How do we want to handle hashed NSEC3 records? Do we ignest them as they are, or crack the NSEC3 hashes first and ingest?
+	Can an AXFR transfer return data out of order? If so, how do we handle that?
 '''
