@@ -82,8 +82,9 @@ async def process_data(file_path: str):
 			if not line:
 				continue
 
+			# Skip comments but detect AXFR transfers to change the source)
 			if line.startswith(';'):
-				if 'DiG' in line and 'AXFR' in line: # Zone transfer from an AXFR request
+				if 'DiG' in line and 'AXFR' in line:
 					source = 'axfr'
 				continue
 				
@@ -185,12 +186,14 @@ Input:
 		'_index'  : 'dns-zones',
 		'_source' : {
 			'domain'  : '1001.vegas',
+			'zone'    : 'vegas',
 			'records' : {
 				'ns': [
 					{'ttl': 3600, 'data': 'ns11.waterrockdigital.com'},
 					{'ttl': 3600, 'data': 'ns12.waterrockdigital.com'}
 				]
 			},
+			'source'  : 'czds',
 			'seen'    : '2021-09-01T00:00:00Z'
 		}
 	}
