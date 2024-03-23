@@ -88,7 +88,7 @@ async def process_data(file_path: str):
 				if 'DiG' in line and 'AXFR' in line: # Do we need to worry about case sensitivity? How can we store the nameserver aswell?
 					source = 'axfr'
 				continue
-				
+
 			# Split the line into its parts
 			parts = line.split()
 
@@ -127,21 +127,21 @@ async def process_data(file_path: str):
 
 			# Check if we are still processing the same domain
 			if last:
-				if domain == last['domain']: # This record is for the same domain as the cached document
-					if record_type in last['_doc']['records']:
-						last['_doc']['records'][record_type].append({'ttl': ttl, 'data': data}) # Do we need to check for duplicate records?
+				if domain == last['doc']['domain']:
+					if record_type in last['doc']['records']:
+						last['doc']['records'][record_type].append({'ttl': ttl, 'data': data}) # Do we need to check for duplicate records?
 					else:
-						last['_doc']['records'][record_type] = [{'ttl': ttl, 'data': data}]
+						last['doc']['records'][record_type] = [{'ttl': ttl, 'data': data}]
 					continue
 				else:
-					yield last # Return the last document and start a new one
+					yield last
 
 			# Cache the document
 			last = {
 				'_op_type' : 'update',
 				'_id'      : domain,
 				'_index'   : default_index,
-				'_doc'     : {
+				'doc'     : {
 					'domain'  : domain,
 					'zone'    : zone,
 					'records' : {record_type: [{'data': data, 'ttl': ttl}]},
