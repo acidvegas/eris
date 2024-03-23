@@ -29,6 +29,7 @@ def construct_map() -> dict:
 		'mappings': {
 			'properties': {
 				'domain'  : keyword_mapping,
+				'zone'    : { 'type': 'keyword' },
 				'records' : { 'type': 'nested', 'properties': {} },
 				'source'  : { 'type': 'keyword' },
 				'seen'    : { 'type': 'date' }
@@ -61,6 +62,9 @@ async def process_data(file_path: str):
 
 		# Initialize the cache
 		last = None
+
+		# Determine the zone name from the file path (e.g., /path/to/zones/com.eu.txt -> com.eu zone)
+		zone = '.'.join(file_path.split('/')[-1].split('.')[:-1])
 
 		# Read the input file line by line
 		async for line in input_file:
@@ -129,6 +133,7 @@ async def process_data(file_path: str):
 				'_index'   : default_index,
 				'_doc'     : {
 					'domain'  : domain,
+					'zone'    : zone,
 					'records' : {record_type: [{'data': data, 'ttl': ttl}]},
 					'source'  : 'czds',
 					'seen'    : time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()) # Zone files do not contain a timestamp, so we use the current time
