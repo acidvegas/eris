@@ -68,6 +68,7 @@ async def process_data(file_path: str):
 
 		# Determine the zone name from the file path (e.g., /path/to/zones/com.eu.txt -> com.eu zone)
 		zone = '.'.join(file_path.split('/')[-1].split('.')[:-1])
+		# Note: For now, this is the best way because we are not just ingesting TLD zone files, but entire zones for domains aswell...
 
 		# Read the input file line by line
 		async for line in input_file:
