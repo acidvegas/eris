@@ -63,6 +63,9 @@ async def process_data(file_path: str):
 		# Initialize the cache
 		last = None
 
+		# Default source for the records
+		source = 'czds'
+
 		# Determine the zone name from the file path (e.g., /path/to/zones/com.eu.txt -> com.eu zone)
 		zone = '.'.join(file_path.split('/')[-1].split('.')[:-1])
 
@@ -76,9 +79,14 @@ async def process_data(file_path: str):
 				break
 
 			# Skip empty lines and comments
-			if not line or line.startswith(';'):
+			if not line:
 				continue
 
+			if line.startswith(';'):
+				if 'DiG' in line and 'AXFR' in line: # Zone transfer from an AXFR request
+					source = 'axfr'
+				continue
+				
 			# Split the line into its parts
 			parts = line.split()
 
@@ -135,7 +143,7 @@ async def process_data(file_path: str):
 					'domain'  : domain,
 					'zone'    : zone,
 					'records' : {record_type: [{'data': data, 'ttl': ttl}]},
-					'source'  : 'czds',
+					'source'  : source,
 					'seen'    : time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()) # Zone files do not contain a timestamp, so we use the current time
 				},
 				'doc_as_upsert' : True # This will create the document if it does not exist
