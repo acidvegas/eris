@@ -12,7 +12,7 @@ except ImportError:
 
 
 # Set a default elasticsearch index if one is not provided
-default_index = 'dns-zones'
+default_index = 'eris-zones'
 
 # Known DNS record types found in zone files
 record_types  = ('a','aaaa','caa','cdnskey','cds','cname','dnskey','ds','mx','naptr','ns','nsec','nsec3','nsec3param','ptr','rrsig','rp','sshfp','soa','srv','txt','type65534')
@@ -29,7 +29,8 @@ def construct_map() -> dict:
 		'mappings': {
 			'properties': {
 				'domain'  : keyword_mapping,
-				'records' : { 'properties': {} },
+				'records' : { 'type': 'nested', 'properties': {} },
+				'source'  : { 'type': 'keyword' },
 				'seen'    : { 'type': 'date' }
 			}
 		}
@@ -39,9 +40,10 @@ def construct_map() -> dict:
 	for record_type in record_types:
 		if record_type in ('a','aaaa'):
 			mapping['mappings']['properties']['records']['properties'][record_type] = {
-				'properties': {
-					'data': { 'type': 'ip' if record_type in ('a','aaaa') else keyword_mapping},
-					'ttl':  { 'type': 'integer' }
+				'type'       : 'nested',
+				'properties' : {
+					'data' : { 'type': 'ip' if record_type in ('a','aaaa') else keyword_mapping },
+					'ttl'  : { 'type': 'integer' }
 				}
 			}
 
@@ -127,7 +129,8 @@ async def process_data(file_path: str):
 				'_index'   : default_index,
 				'_doc'     : {
 					'domain'  : domain,
-					'records' : {record_type: [{'ttl': ttl, 'data': data}]},
+					'records' : {record_type: [{'data': data, 'ttl': ttl}]},
+					'source'  : 'czds',
 					'seen'    : time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()) # Zone files do not contain a timestamp, so we use the current time
 				},
 				'doc_as_upsert' : True # This will create the document if it does not exist
