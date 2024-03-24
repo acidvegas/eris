@@ -19,11 +19,6 @@ try:
 except ImportError:
 	raise ImportError('Missing required \'elasticsearch\' library. (pip install elasticsearch)')
 
-try:
-	from ecs_logging import StdlibFormatter
-except ImportError:
-	raise ImportError('Missing required \'ecs-logging\' library. (pip install ecs-logging)')
-
 
 class ElasticIndexer:
 	def __init__(self, args: argparse.Namespace):
@@ -59,6 +54,12 @@ class ElasticIndexer:
 			es_config['basic_auth'] = (args.user, args.password)
 
 		self.es = AsyncElasticsearch(**es_config)
+
+
+	async def close_connect(self):
+		'''Close the Elasticsearch connection.'''
+
+		await self.es.close()
 
 
 	async def create_index(self, map_body: dict, pipeline: str = None, replicas: int = 1, shards: int = 1):
@@ -131,7 +132,7 @@ class ElasticIndexer:
 			raise Exception(f'Failed to index records to {self.es_index} from {file_path} ({e})')
 
 
-def setup_logger(console_level: int = logging.INFO, file_level: int = None, log_file: str = 'debug.json', max_file_size: int = 10*1024*1024, backups: int = 5):
+def setup_logger(console_level: int = logging.INFO, file_level: int = None, log_file: str = 'debug.json', max_file_size: int = 10*1024*1024, backups: int = 5, ecs_format: bool = False):
 	'''
 	Setup the global logger for the application.
 
@@ -140,13 +141,14 @@ def setup_logger(console_level: int = logging.INFO, file_level: int = None, log_
 	:param log_file: File to write logs to.
 	:param max_file_size: Maximum size of the log file before it is rotated.
 	:param backups: Number of backup log files to keep.
+	:param ecs_format: Use the Elastic Common Schema (ECS) format for logs.
 	'''
 
 	# Configure the root logger
 	logger = logging.getLogger()
 	logger.setLevel(logging.DEBUG) # Minimum level to capture all logs
 
-	# Clear existing handlers
+	# Clear existing handlersaise Exception(f'Failed to fetch zone links: {e}')
 	logger.handlers = []
 
 	# Setup console handler
@@ -160,8 +162,18 @@ def setup_logger(console_level: int = logging.INFO, file_level: int = None, log_
 	if file_level is not None:
 		file_handler = logging.handlers.RotatingFileHandler(log_file, maxBytes=max_file_size, backupCount=backups)
 		file_handler.setLevel(file_level)
-		ecs_formatter = StdlibFormatter() # ECS (Elastic Common Schema) formatter
-		file_handler.setFormatter(ecs_formatter)
+  
+		# Setup formatter to use ECS format if enabled or default format
+		if ecs_format:
+			try:
+				from ecs_logging import StdlibFormatter
+			except ImportError:
+				raise ImportError('Missing required \'ecs-logging\' library. (pip install ecs-logging)')
+			file_formatter = StdlibFormatter() # ECS formatter
+		else:
+			file_formatter = logging.Formatter('%(asctime)s | %(levelname)9s | %(message)s', '%Y-%m-%d %H:%M:%S')
+        
+		file_handler.setFormatter(file_formatter)
 		logger.addHandler(file_handler)
 
 
@@ -174,6 +186,7 @@ async def main():
 	parser.add_argument('input_path', help='Path to the input file or directory') # Required
 	parser.add_argument('--watch', action='store_true', help='Create or watch a FIFO for real-time indexing')
 	parser.add_argument('--log', choices=['debug', 'info', 'warning', 'error', 'critical'], help='Logging file level (default: disabled)')
+	parser.add_argument('--ecs', action='store_true', default=False, help='Use the Elastic Common Schema (ECS) for logging')
 
 	# Elasticsearch arguments
 	parser.add_argument('--host', default='http://localhost', help='Elasticsearch host')
@@ -202,13 +215,13 @@ async def main():
 	parser.add_argument('--massdns', action='store_true', help='Index Massdns records')
 	parser.add_argument('--zone', action='store_true', help='Index Zone records')
 
+	args = parser.parse_args()
+
 	if args.log:
 		levels = {'debug': logging.DEBUG, 'info': logging.INFO, 'warning': logging.WARNING, 'error': logging.ERROR, 'critical': logging.CRITICAL}
-		setup_logger(file_level=levels[args.log], log_file='eris.log')
+		setup_logger(file_level=levels[args.log], log_file='eris.log', ecs_format=args.ecs)
 	else:
 		setup_logger()
-
-	args = parser.parse_args()
 
 	if args.host.endswith('/'):
 		args.host = args.host[:-1]
@@ -269,6 +282,8 @@ async def main():
 				count += 1
 			else:
 				logging.warning(f'[{count:,}/{total:,}] Skipping non-file: {file_path}')
+
+	await edx.close_connect() # Close the Elasticsearch connection to stop "Unclosed client session" warnings
 
 
 

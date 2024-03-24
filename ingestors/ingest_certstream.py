@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # Elasticsearch Recon Ingestion Scripts (ERIS) - Developed by Acidvegas (https://git.acid.vegas/eris)
-# ingest_certs.py
+# ingest_certstream.py
 
 import asyncio
 import json
@@ -15,6 +15,10 @@ except ImportError:
 
 # Set a default elasticsearch index if one is not provided
 default_index = 'eris-certstream'
+
+# Set the cache size for the Certstream records to prevent duplicates
+cache      = []
+cache_size = 5000
 
 
 def construct_map() -> dict:
@@ -56,14 +60,14 @@ async def process_data(place_holder: str = None):
 					continue
 
 				# Grab the unique domains from the records
-				all_domains = record['data']['leaf_cert']['all_domains']
+				all_domains = set(record['data']['leaf_cert']['all_domains'])
 				domains     =  list()
 
 				# We only care about subdomains (excluding www. and wildcards)
 				for domain in all_domains:
 					if domain.startswith('*.'):
 						domain = domain[2:]
-					elif domain.startswith('www.') and domain.count('.') == 2:
+					if domain.startswith('www.') and domain.count('.') == 2:
 						continue
 					if domain.count('.') > 1:
 						# TODO: Add a check for PSL TLDs...domain.co.uk, domain.com.au, etc. (we want to ignore these if they are not subdomains)
@@ -72,6 +76,14 @@ async def process_data(place_holder: str = None):
 
 				# Construct the document
 				for domain in domains:
+					if domain in cache:
+						continue # Skip the domain if it is already in the cache
+
+					if len(cache) >= cache_size:
+						cache.pop(0) # Remove the oldest domain from the cache
+
+					cache.append(domain) # Add the domain to the cache
+
 					struct = {
 						'domain' : domain,
 						'seen'   : time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
@@ -158,6 +170,13 @@ Output:
 			"update_type": "PrecertLogEntry"
 		},
 		"message_type": "certificate_update"
+	}
+
+	
+Input:
+	{
+		"domain" : "d7zdnegbre53n.amplifyapp.com",
+		"seen"   : "2022-01-02T12:00:00Z"
 	}
 
 Notes:

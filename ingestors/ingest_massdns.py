@@ -104,7 +104,7 @@ async def process_data(input_path: str):
 					'_index'   : default_index,
 					'doc'      : {
 						'ip'     : ip,
-						'record' : [record], # Consider using painless script to add to list if it exists (Use 'seen' per-record and 'last_seen' for the IP address)
+						'record' : [record],
 						'seen'   : time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
 					},
 					'doc_as_upsert' : True # Create the document if it does not exist

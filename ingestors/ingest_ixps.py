@@ -26,10 +26,15 @@ def construct_map() -> dict:
 	mapping = {
 		'mappings': {
 			'properties': {
-				'name'           : {'type': 'keyword'},
-				'alternatenames' : {'type': 'keyword'},
-				'sources'        : {'type': 'keyword'},
-				'prefixes'       : { 'properties': { 'ipv4' : {'type': 'ip'}, 'ipv6' : {'type': 'ip_range'} } },
+				'name'           : { 'type': 'keyword' },
+				'alternatenames' : { 'type': 'keyword' },
+				'sources'        : { 'type': 'keyword' },
+				'prefixes'       : {
+        			'properties': {
+               			'ipv4' : { 'type': 'ip'       },
+                  		'ipv6' : { 'type': 'ip_range' }
+                    }
+           		},
 				'url'            : { 'type': 'keyword' },
 				'region'         : { 'type': 'keyword' },
 				'country'        : { 'type': 'keyword' },

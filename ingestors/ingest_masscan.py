@@ -94,7 +94,7 @@ async def process_data(input_path: str):
 			# Process each port in the record
 			for port_info in record['ports']:
 				struct = {
-					'ip'   : record['ip'],
+					'ip'    : record['ip'],
 					'port'  : port_info['port'],
 					'proto' : port_info['proto'],
 					'seen'  : time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(int(record['timestamp'])))
