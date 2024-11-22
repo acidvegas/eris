@@ -140,13 +140,25 @@ if __name__ == '__main__':
 
 '''
 Deployment:
+	printf "\nsession    required   pam_limits.so" >> /etc/pam.d/su
+	printf "acidvegas    hard    nofile    65535\nacidvegas    soft    nofile    65535" >> /etc/security/limits.conf
+	echo "net.netfilter.nf_conntrack_max = 131072" >> /etc/sysctl.conf
+	echo "net.netfilter.nf_conntrack_udp_timeout = 30" >> /etc/sysctl.conf
+	echo "net.netfilter.nf_conntrack_udp_timeout_stream = 120" >> /etc/sysctl.conf
+	echo "net.netfilter.nf_conntrack_tcp_timeout_established = 300" >> /etc/sysctl.conf
+	sysctl -p
+
 	sudo apt-get install build-essential gcc make python3 python3-pip
 	pip install aiofiles aiohttp elasticsearch
 	git clone --depth 1 https://github.com/acidvegas/eris.git $HOME/eris
 
 	git clone --depth 1 https://github.com/blechschmidt/massdns.git $HOME/massdns && cd $HOME/massdns && make
-	curl -s https://public-dns.info/nameservers.txt | grep -v ':' > $HOME/massdns/nameservers.txt
-	while true; do python3 ./scripts/ptr.py | ./bin/massdns -r $HOME/massdns/nameservers.txt -t PTR --filter NOERROR -o S -w $HOME/eris/FIFO; done
+	wget -O $HOME/massdns/resolvers.txt https://raw.githubusercontent.com/trickest/resolvers/refs/heads/main/resolvers.txt
+	while true; do python3 ./scripts/ptr.py | ./bin/massdns -r $HOME/massdns/resolvers.txt -t PTR --filter NOERROR -s 5000 -o S -w $HOME/eris/FIFO; done
+
+	screen -S eris
+	python3 $HOME/eris/eris.py --massdns
+
 
 
 Output:

@@ -14,7 +14,7 @@ except ImportError:
 
 
 # Set a default elasticsearch index if one is not provided
-default_index = 'rir-delegation-' + time.strftime('%Y-%m-%d')
+default_index = 'eris-rir-delegations'
 
 # Delegation data sources
 delegation_db = {
@@ -52,7 +52,8 @@ def construct_map() -> dict:
 				},
 				'date'       : { 'type': 'date'    },
 				'status'     : { 'type': 'keyword' },
-				'extensions' : keyword_mapping
+				'extensions' : keyword_mapping,
+				'seen'       : { 'type': 'date' }
 			}
 		}
 	}
@@ -60,8 +61,12 @@ def construct_map() -> dict:
 	return mapping
 
 
-async def process_data():
-	'''Read and process the delegation data.'''
+async def process_data(place_holder: str = None):
+	'''
+	Read and process the delegation data.
+
+	:param place_holder: Placeholder parameter to match the process_data function signature of other ingestors.
+	'''
 
 	for registry, url in delegation_db.items():
 		try:
@@ -150,12 +155,13 @@ async def process_data():
 							if not record['date'] or record['date'] == '00000000':
 								del record['date']
 							else:
-								record['date'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.strptime(record['date'], '%Y%m%d')),
+								record['date'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.strptime(record['date'], '%Y%m%d'))
 
 							if record['status'] not in ('allocated', 'assigned', 'available', 'reserved', 'unallocated', 'unknown'):
 								raise ValueError(f'Invalid status: {cache}')
-
-							#json_output['records'].append(record)
+							
+							# Set the seen timestamp
+							record['seen'] = time.strftime('%Y-%m-%dT%H:%M:%SZ')
 
 							# Let's just index the records themself (for now)
 							yield {'_index': default_index, '_source': record}

@@ -9,8 +9,9 @@ import logging.handlers
 import os
 import stat
 import sys
+import json
 
-sys.dont_write_bytecode = True
+sys.dont_write_bytecode = True # FUCKOFF __pycache__
 
 try:
 	from elasticsearch            import AsyncElasticsearch
@@ -34,8 +35,8 @@ class ElasticIndexer:
 
 		# Sniffing disabled due to an issue with the elasticsearch 8.x client (https://github.com/elastic/elasticsearch-py/issues/2005)
 		es_config = {
-			#'hosts'               : [f'{args.host}:{args.port}'],
-			'hosts'                : [f'{args.host}:{port}' for port in ('9002', '9003', '9004')], # Temporary alternative to sniffing
+			'hosts'               : [f'{args.host}:{args.port}'],
+			#'hosts'                : [f'{args.host}:{port}' for port in ('9200',)], # Temporary alternative to sniffing
 			'verify_certs'         : args.self_signed,
 			'ssl_show_warn'        : args.self_signed,
 			'request_timeout'      : args.timeout,
@@ -104,19 +105,27 @@ class ElasticIndexer:
 		Index records in chunks to Elasticsearch.
 
 		:param file_path: Path to the file
-		:param index_name: Name of the index
 		:param data_generator: Generator for the records to index
 		'''
 
-		count = 0
-		total = 0
+		count  = 0
+		total  = 0
+		errors = []
 
 		try:
-			async for ok, result in async_streaming_bulk(self.es, actions=data_generator(file_path), chunk_size=self.chunk_size, max_chunk_bytes=self.chunk_max):
+			async for ok, result in async_streaming_bulk(self.es, actions=data_generator(file_path), chunk_size=self.chunk_size, max_chunk_bytes=self.chunk_max,raise_on_error=False):
 				action, result = result.popitem()
 
 				if not ok:
-					logging.error(f'Failed to index document ({result["_id"]}) to {self.es_index} from {file_path} ({result})')
+					error_type   = result.get('error', {}).get('type',   'unknown')
+					error_reason = result.get('error', {}).get('reason', 'unknown')
+					logging.error('FAILED DOCUMENT:')
+					logging.error(f'Error Type   : {error_type}')
+					logging.error(f'Error Reason : {error_reason}')
+					logging.error('Document     : ')
+					logging.error(json.dumps(result, indent=2))
+					input('Press Enter to continue...')
+					errors.append(result)
 					continue
 
 				count += 1
@@ -126,7 +135,8 @@ class ElasticIndexer:
 					logging.info(f'Successfully indexed {self.chunk_size:,} ({total:,} processed) records to {self.es_index} from {file_path}')
 					count = 0
 
-			logging.info(f'Finished indexing {total:,} records to {self.es_index} from {file_path}')
+			if errors:
+				raise Exception(f'{len(errors):,} document(s) failed to index. Check the logs above for details.')
 
 		except Exception as e:
 			raise Exception(f'Failed to index records to {self.es_index} from {file_path} ({e})')
@@ -148,7 +158,7 @@ def setup_logger(console_level: int = logging.INFO, file_level: int = None, log_
 	logger = logging.getLogger()
 	logger.setLevel(logging.DEBUG) # Minimum level to capture all logs
 
-	# Clear existing handlersaise Exception(f'Failed to fetch zone links: {e}')
+	# Clear existing handlers
 	logger.handlers = []
 
 	# Setup console handler
@@ -203,8 +213,8 @@ async def main():
 	parser.add_argument('--shards', type=int, default=1, help='Number of shards for the index')
 
 	# Performance arguments
-	parser.add_argument('--chunk-size', type=int, default=50000, help='Number of records to index in a chunk')
-	parser.add_argument('--chunk-max', type=int, default=100, help='Maximum size of a chunk in bytes')
+	parser.add_argument('--chunk-size', type=int, default=5000, help='Number of records to index in a chunk')
+	parser.add_argument('--chunk-max', type=int, default=10485760, help='Maximum size of a chunk in bytes (default 10mb)')
 	parser.add_argument('--retries', type=int, default=30, help='Number of times to retry indexing a chunk before failing')
 	parser.add_argument('--timeout', type=int, default=60, help='Number of seconds to wait before retrying a chunk')
 
@@ -214,6 +224,8 @@ async def main():
 	parser.add_argument('--masscan', action='store_true', help='Index Masscan records')
 	parser.add_argument('--massdns', action='store_true', help='Index Massdns records')
 	parser.add_argument('--zone', action='store_true', help='Index Zone records')
+	parser.add_argument('--rir-delegations', action='store_true', help='Index RIR Delegations records')
+	parser.add_argument('--rir-transfers', action='store_true', help='Index RIR Transfers records')
 
 	args = parser.parse_args()
 
@@ -239,15 +251,19 @@ async def main():
 	edx = ElasticIndexer(args)
 
 	if args.certstream:
-		from ingestors import ingest_certstream as ingestor
+		from ingestors import ingest_certstream      as ingestor
 	elif args.httpx:
-		from ingestors import ingest_httpx      as ingestor
+		from ingestors import ingest_httpx           as ingestor
 	elif args.masscan:
-		from ingestors import ingest_masscan    as ingestor
+		from ingestors import ingest_masscan         as ingestor
 	elif args.massdns:
-		from ingestors import ingest_massdns    as ingestor
+		from ingestors import ingest_massdns         as ingestor
+	elif args.rir_delegations:
+		from ingestors import ingest_rir_delegations as ingestor
+	elif args.rir_transfers:
+		from ingestors import ingest_rir_transfers   as ingestor
 	elif args.zone:
-		from ingestors import ingest_zone       as ingestor
+		from ingestors import ingest_zone            as ingestor
 	else:
 		raise ValueError('No ingestor specified')
 

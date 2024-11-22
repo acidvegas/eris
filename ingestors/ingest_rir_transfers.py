@@ -13,7 +13,7 @@ except ImportError:
 
 
 # Set a default elasticsearch index if one is not provided
-default_index = 'rir-transfer-' + time.strftime('%Y-%m-%d')
+default_index = 'eris-rir-transfers'
 
 # Transfers data sources
 transfers_db = {
@@ -38,27 +38,28 @@ def construct_map() -> dict:
 				'date'    : { 'type': 'date' },
 				'ip4nets' : {
 					'properties': {
-						'original_set' : { 'properties': { 'start_address': { 'type': 'ip' }, 'end_address' : { 'type': 'ip' } } },
-						'transfer_set' : { 'properties': { 'start_address': { 'type': 'ip' }, 'end_address' : { 'type': 'ip' } } }
+						'original_set': { 'properties': { 'start_address': { 'type': 'ip' }, 'end_address': { 'type': 'ip' } } },
+						'transfer_set': { 'properties': { 'start_address': { 'type': 'ip' }, 'end_address': { 'type': 'ip' } } }
 					}
 				},
 				'ip6nets' : {
 					'properties': {
-						'original_set' : { 'properties': { 'start_address': { 'type': 'ip' }, 'end_address' : { 'type': 'ip' } } },
-						'transfer_set' : { 'properties': { 'start_address': { 'type': 'ip' }, 'end_address' : { 'type': 'ip' } } }
+						'original_set': { 'properties': { 'start_address': { 'type': 'ip' }, 'end_address': { 'type': 'ip' } } },
+						'transfer_set': { 'properties': { 'start_address': { 'type': 'ip' }, 'end_address': { 'type': 'ip' } } }
 					}
 				},
 				'asns' : {
 					'properties': {
-						'original_set' : { 'properties': { 'start': { 'type': 'integer' }, 'end' : { 'type': 'integer' } } },
-						'transfer_set' : { 'properties': { 'start': { 'type': 'integer' }, 'end' : { 'type': 'integer' } } }
+						'original_set': { 'properties': { 'start': { 'type': 'integer' }, 'end': { 'type': 'integer' } } },
+						'transfer_set': { 'properties': { 'start': { 'type': 'integer' }, 'end': { 'type': 'integer' } } }
 					}
 				},
 				'type'                   : { 'type': 'keyword' },
-				'source_organization'    : { 'properties': { 'name':  keyword_mapping, 'country_code' : { 'type': 'keyword' } } },
-				'recipient_organization' : { 'properties': { 'name':  keyword_mapping, 'country_code' : { 'type': 'keyword' } } },
+				'source_organization'    : { 'properties': { 'name':  keyword_mapping, 'country_code': { 'type': 'keyword' } } },
+				'recipient_organization' : { 'properties': { 'name':  keyword_mapping, 'country_code': { 'type': 'keyword' } } },
 				'source_rir'             : { 'type': 'keyword' },
 				'recipient_rir'          : { 'type': 'keyword' },
+				'seen'                   : { 'type': 'date' }
 			}
 		}
 	}
@@ -89,6 +90,7 @@ async def process_data():
 						raise Exception(f'Invalid {registry} delegation data: {json_data}')
 
 					for record in json_data['transfers']:
+						record['seen'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
 
 						if 'asns' in record:
 							for set_type in ('original_set', 'transfer_set'):
