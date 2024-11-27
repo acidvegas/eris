@@ -71,10 +71,6 @@ async def process_data(input_path: str):
 			if not line or not line.startswith('{'):
 				continue
 
-			# Do we need this? Masscan JSON output seems with seperate records with a comma between lines for some reason...
-			if line.endswith(','):
-				line = line[:-1]
-
 			# Parse the JSON record
 			try:
 				record = json.loads(line)
@@ -86,36 +82,27 @@ async def process_data(input_path: str):
 				input('Press Enter to continue...') # Pause for review & debugging (remove this in production)
 				continue
 
-			# In rare cases, a single record may contain multiple ports, though I have yet to witness this...
-			if len(record['ports']) > 1:
-				logging.warning(f'Multiple ports found for record! ({record})')
-				input('Press Enter to continue...') # Pause for review (remove this in production)
+			# Process the record
+			struct = {
+				'ip'    : record['ip'],
+				'port'  : record['port'],
+				'proto' : record['proto'],
+				'seen'  : time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(int(record['timestamp'])))
+			}
 
-			# Process each port in the record
-			for port_info in record['ports']:
-				struct = {
-					'ip'    : record['ip'],
-					'port'  : port_info['port'],
-					'proto' : port_info['proto'],
-					'seen'  : time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(int(record['timestamp'])))
-				}
+			# Add the service information if available (this field is optional)
+			if record['rec_type'] == 'banner':
+				data = record['data']
+				if 'service_name' in data:
+					if (service_name := data['service_name']) not in ('unknown', ''):
+						struct['service'] = service_name
+				if 'banner' in data:
+					banner = ' '.join(data['banner'].split()) # Remove extra whitespace
+					if banner:
+						struct['banner'] = banner
 
-				# Add the service information if available (this field is optional)
-				if 'service' in port_info:
-
-        			# Add the service name if available
-					if 'name' in port_info['service']:
-						if (service_name := port_info['service']['name']) not in ('unknown',''):
-							struct['service'] = service_name
-
-					# Add the service banner if available
-					if 'banner' in port_info['service']:
-						banner = ' '.join(port_info['service']['banner'].split()) # Remove extra whitespace
-						if banner:
-							struct['banner'] = banner
-
-				# Yield the record
-				yield {'_index': default_index, '_source': struct}
+			# Yield the record
+			yield {'_index': default_index, '_source': struct}
 
 
 async def test(input_path: str):
@@ -149,8 +136,8 @@ Deploy:
 	/sbin/iptables -A INPUT -p tcp --dport 61010 -j DROP # Not persistent
 	printf "0.0.0.0/8\n10.0.0.0/8\n100.64.0.0/10\n127.0.0.0/8\n169.254.0.0/16\n172.16.0.0/12\n192.0.0.0/24\n192.0.2.0/24\n192.31.196.0/24\n192.52.193.0/24\n192.88.99.0/24\n192.168.0.0/16\n192.175.48.0/24\n198.18.0.0/15\n198.51.100.0/24\n203.0.113.0/24\n224.0.0.0/3\n255.255.255.255/32"  > exclude.conf
 	screen -S scan
-	masscan 0.0.0.0/0 -p18000 --banners --http-user-agent "USER_AGENT" --source-port 61010 --open-only --rate 30000 --excludefile exclude.conf -oJ 18000.json
-	masscan 0.0.0.0/0 -p21,22,23 --banners --http-user-agent "USER_AGENT" --source-port 61000-65503 --open-only --rate 30000 --excludefile exclude.conf -oJ output_new.json --shard $i/$TOTAL
+	masscan 0.0.0.0/0 -p18000 --banners --http-user-agent "USER_AGENT" --source-port 61010 --open-only --rate 30000 --excludefile exclude.conf -oD 18000.json
+	masscan 0.0.0.0/0 -p21,22,23 --banners --http-user-agent "USER_AGENT" --source-port 61000-65503 --open-only --rate 30000 --excludefile exclude.conf -oD output_new.json --shard $i/$TOTAL
 
 Output:
 	{
