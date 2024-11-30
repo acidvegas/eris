@@ -5,7 +5,6 @@
 import ipaddress
 import logging
 import time
-from typing import Dict, List, Set
 
 try:
     import aiohttp
@@ -45,7 +44,7 @@ def construct_map() -> dict:
 
     return mapping
 
-async def fetch_ipset(session: aiohttp.ClientSession, ipset_name: str) -> Dict:
+async def fetch_ipset(session: aiohttp.ClientSession, ipset_name: str) -> dict:
     '''
     Fetch and parse a Firehol ipset.
 
@@ -114,7 +113,7 @@ async def fetch_ipset(session: aiohttp.ClientSession, ipset_name: str) -> Dict:
     return None
 
 
-async def get_all_ipsets(session: aiohttp.ClientSession) -> List[str]:
+async def get_all_ipsets(session: aiohttp.ClientSession) -> list:
     '''
     Fetch list of all available ipsets from the Firehol repository.
     

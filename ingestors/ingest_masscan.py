@@ -13,7 +13,7 @@ except ImportError:
 
 
 # Set a default elasticsearch index if one is not provided
-default_index = 'masscan-logs'
+default_index = 'eris-masscan'
 
 
 def construct_map() -> dict:
@@ -75,11 +75,7 @@ async def process_data(input_path: str):
 			try:
 				record = json.loads(line)
 			except json.decoder.JSONDecodeError:
-				# In rare cases, the JSON record may be incomplete or malformed:
-				#   { "ip": "51.161.12.223", "timestamp": "1707628302", "ports": [ {"port": 22, "proto": "tcp", "service": {"name": "ssh", "banner":
-				#   { "ip": "83.66.211.246", "timestamp": "1706557002"
 				logging.error(f'Failed to parse JSON record! ({line})')
-				input('Press Enter to continue...') # Pause for review & debugging (remove this in production)
 				continue
 
 			# Process the record
