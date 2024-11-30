@@ -2,6 +2,14 @@
 # Elasticsearch Recon Ingestion Scripts (ERIS) - Developed by Acidvegas (https://git.acid.vegas/eris)
 # ingest_meshtastic.py
 
+'''
+This plugin needs the meshtastic-mqtt-json library to convert Meshtastic MQTT messages to JSON.
+	pip install meshtastic-mqtt-json
+
+Use this command to pipe Meshtastic MQTT messages to the ERIS FIFO when using the --watch flag:
+	meshtastic-mqtt-json > ERIS_FIFO_PATH
+'''
+
 import asyncio
 import json
 import logging
@@ -23,7 +31,8 @@ def construct_map() -> dict:
 	# Match on exact value or full text search
 	keyword_mapping = { 'type': 'text', 'fields': { 'keyword': { 'type': 'keyword', 'ignore_above': 256 } } }
 
-	return {
+	# Construct the index mapping
+	mapping = {
 		'mappings': {
 			'properties': {
 				'channel' : { 'type': 'long'},
@@ -127,6 +136,8 @@ def construct_map() -> dict:
 			}
 		}
 	}
+
+	return mapping
 
 
 async def process_data(input_path: str):
