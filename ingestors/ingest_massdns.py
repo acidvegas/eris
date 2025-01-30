@@ -42,76 +42,75 @@ async def process_data(input_path: str):
 	:param input_path: Path to the input file
 	'''
 
+	# Open the input file
 	async with aiofiles.open(input_path) as input_file:
 
 		# Cache the last document to avoid creating a new one for the same IP address
 		last = None
 
-		try:
-			# Read the input file line by line
-			async for line in input_file:
-				line = line.strip()
+		# Read the input file line by line
+		async for line in input_file:
 
-				# Sentinel value to indicate the end of a process (for closing out a FIFO stream)
-				if line == '~eof':
-					yield last
-					break
+			# Strip whitespace
+			line = line.strip()
 
-				# Skip empty lines (doubtful we will have any, but just in case)
-				if not line:
+			# Skip empty lines
+			if not line:
+				continue
+
+			# Sentinel value to indicate the end of a process (for closing out a FIFO stream)
+			if line == '~eof':
+				yield last
+				break
+
+			# Split the line into its parts
+			parts = line.split()
+
+			# Ensure the line has at least 3 parts
+			if len(parts) < 3:
+				logging.warning(f'Invalid PTR record: {line}')
+				continue
+
+			# Split the PTR record into its parts
+			name, record_type, record = parts[0].rstrip('.'), parts[1], ' '.join(parts[2:]).rstrip('.')
+
+			# Do not index other records
+			if record_type != 'PTR':
+				continue
+
+			# Do not index PTR records that do not have a record
+			if not record:
+				continue
+
+			# Do not index PTR records that have the same record as the in-addr.arpa domain
+			if record == name:
+				continue
+
+			# Get the IP address from the in-addr.arpa domain
+			ip = '.'.join(name.replace('.in-addr.arpa', '').split('.')[::-1])
+
+			# Check if we are still processing the same IP address
+			if last:
+				if ip == last['_id']: # This record is for the same IP address as the cached document
+					last_records = last['doc']['record']
+					if record not in last_records: # Do not index duplicate records
+						last['doc']['record'].append(record)
 					continue
+				else:
+					yield last # Return the last document and start a new one
 
-				# Split the line into its parts
-				parts = line.split()
-
-				# Ensure the line has at least 3 parts
-				if len(parts) < 3:
-					logging.warning(f'Invalid PTR record: {line}')
-					continue
-
-				# Split the PTR record into its parts
-				name, record_type, record = parts[0].rstrip('.'), parts[1], ' '.join(parts[2:]).rstrip('.')
-
-				# Do not index other records
-				if record_type != 'PTR':
-					continue
-
-				# Do not index PTR records that do not have a record
-				if not record:
-					continue
-
-				# Do not index PTR records that have the same record as the in-addr.arpa domain
-				if record == name:
-					continue
-
-				# Get the IP address from the in-addr.arpa domain
-				ip = '.'.join(name.replace('.in-addr.arpa', '').split('.')[::-1])
-
-				# Check if we are still processing the same IP address
-				if last:
-					if ip == last['_id']: # This record is for the same IP address as the cached document
-						last_records = last['doc']['record']
-						if record not in last_records: # Do not index duplicate records
-							last['doc']['record'].append(record)
-						continue
-					else:
-						yield last # Return the last document and start a new one
-
-				# Cache the document
-				last = {
-					'_op_type' : 'update',
-					'_id'      : ip,
-					'_index'   : default_index,
-					'doc'      : {
-						'ip'     : ip,
-						'record' : [record],
-						'seen'   : time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
-					},
-					'doc_as_upsert' : True # Create the document if it does not exist
-				}
-
-		except Exception as e:
-			logging.error(f'Error processing data: {e}')
+			# Cache the document
+			last = {
+				'_op_type' : 'update',
+				'_id'      : ip,
+				'_index'   : default_index,
+				'doc'      : {
+					'ip'     : ip,
+					'record' : [record],
+					'seen'   : time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+				},
+				'doc_as_upsert' : True # Create the document if it does not exist
+			}
 
 
 async def test(input_path: str):

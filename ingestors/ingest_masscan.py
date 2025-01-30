@@ -22,17 +22,6 @@ def construct_map() -> dict:
 	# Match on exact value or full text search
 	keyword_mapping = { 'type': 'text',  'fields': { 'keyword': { 'type': 'keyword', 'ignore_above': 256 } } }
 
-	# Construct the geoip mapping (Used with the geoip pipeline to enrich the data)
-	geoip_mapping = {
-		'city_name'        : keyword_mapping,
-		'continent_name'   : keyword_mapping,
-		'country_iso_code' : keyword_mapping,
-		'country_name'     : keyword_mapping,
-		'location'         : { 'type': 'geo_point' },
-		'region_iso_code'  : keyword_mapping,
-		'region_name'      : keyword_mapping,
-	}
-
 	# Construct the index mapping
 	mapping = {
 		'mappings': {
@@ -42,8 +31,8 @@ def construct_map() -> dict:
 				'proto'   : { 'type': 'keyword' },
 				'service' : { 'type': 'keyword' },
 				'banner'  : keyword_mapping,
+				'ttl'     : { 'type': 'integer' },
 				'seen'    : { 'type': 'date' }
-				#'geoip'	: { 'properties': geoip_mapping }
 			}
 		}
 	}
@@ -83,6 +72,7 @@ async def process_data(input_path: str):
 				'ip'    : record['ip'],
 				'port'  : record['port'],
 				'proto' : record['proto'],
+				'ttl'   : record['ttl'],
 				'seen'  : time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(int(record['timestamp'])))
 			}
 
